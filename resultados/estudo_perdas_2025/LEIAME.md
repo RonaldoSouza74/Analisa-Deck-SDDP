@@ -47,4 +47,5 @@ Cada método foi testado nas barras que têm UF no nome, escondendo essa UF e co
 - `barras_uf.csv`: todas as barras (CA e CC) com UF, método, subsistema, área, tensão, coordenadas e número de ligações (`grau`).
 - `cargas_uf.csv`: cada carga do `dload.dat` com a barra e a UF.
 - `conexoes_usinas_uf.csv`: cada usina do `busconnection.dat` com a barra de conexão e a UF. Para renováveis, `uf_nome_usina` traz a UF do nome da usina e `uf` traz a UF da barra. Em 146 conexões as duas diferem, o que costuma indicar usina perto da divisa conectada em subestação do estado vizinho (ex.: `MMGDMG1921` → `JULIUS-RJ069`).
+- `usinas_renovaveis_uf.csv`: as 9.398 usinas renováveis com tecnologia (Eolica, Solar, GD Solar, Outras GD, Biomassa, PCH, pela coluna `TechTyp` do `cgnd??.dat`), barra de conexão, `uf_barra` e `uf_nome_usina`. É a tabela usada por `scripts/agrega_saidas_uf.py` para somar `gergnd`/`vergnd` por UF.
 - `resumo_uf.csv`: contagem de barras, cargas e usinas (H/T/R) por UF.

@@ -54,6 +54,16 @@ def uf_do_nome_usina(nome):
     return None
 
 
+TECNOLOGIAS = {'0': 'Outras GD', '1': 'Eolica', '2': 'Solar', '3': 'Biomassa', '4': 'PCH'}
+
+
+def tecnologia(nome, techtype):
+    """Tecnologia da usina renovável pela coluna TechTyp do cgnd??.dat."""
+    if nome.startswith('MMGD'):
+        return 'GD Solar'
+    return TECNOLOGIAS.get(techtype, 'Outra')
+
+
 def main(caso, saida):
     os.makedirs(saida, exist_ok=True)
 
@@ -93,6 +103,7 @@ def main(caso, saida):
 
     # --- usinas renováveis (nome com UF) e conexões --------------------------
     usinas_ren = {}  # (sistema_id, codigo) -> nome
+    tec_ren = {}     # (sistema_id, codigo) -> tecnologia
     for arq in sorted(os.listdir(caso)):
         m = re.match(r'^cgnd([a-z]{2})\.dat$', arq)
         if not m:
@@ -101,7 +112,9 @@ def main(caso, saida):
             for ln in f:
                 if ln.startswith(('$', '!')) or not ln.strip():
                     continue
-                usinas_ren[(m.group(1), int(ln[0:4]))] = ln[5:17].strip()
+                chave = (m.group(1), int(ln[0:4]))
+                usinas_ren[chave] = ln[5:17].strip()
+                tec_ren[chave] = tecnologia(usinas_ren[chave], ln.split()[-1])
 
     def nomes_fixos(prefixo):
         """Lê nomes de hidros/térmicas dos arquivos de largura fixa."""
@@ -271,6 +284,17 @@ def main(caso, saida):
     escrever('conexoes_usinas_uf.csv',
              ['sistema', 'tipo_usina', 'cod_usina', 'nome_usina', 'uf_nome_usina', 'barra',
               'nome_barra', 'uf', 'metodo'], conexoes)
+
+    # tabela das usinas renováveis, usada para agregar gergnd/vergnd por UF
+    usinas = []
+    for c in conexoes:
+        if c['tipo_usina'] != 'R':
+            continue
+        usinas.append(dict(nome_usina=c['nome_usina'], sistema=c['sistema'], cod_usina=c['cod_usina'],
+                           tecnologia=tec_ren.get((c['sistema'], c['cod_usina']), ''),
+                           barra=c['barra'], nome_barra=c['nome_barra'], uf_barra=c['uf'],
+                           uf_nome_usina=c['uf_nome_usina'] or c['uf']))
+    escrever('usinas_renovaveis_uf.csv', list(usinas[0].keys()) if usinas else [], usinas)
 
     resumo = collections.defaultdict(collections.Counter)
     for b in barras.values():
