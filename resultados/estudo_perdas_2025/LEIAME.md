@@ -6,7 +6,7 @@ Gerado por `scripts/barras_uf.py` a partir do caso SDDP (versão 18.0.11rc).
 python scripts/barras_uf.py <pasta_do_caso> resultados/estudo_perdas_2025
 ```
 
-Os CSV usam `;` como separador e UTF-8 com BOM, para abrir direto no Excel.
+Os CSV usam vírgula como separador e ponto decimal, como os CSV exportados pelo SDDP.
 
 ## Arquivos do SDDP usados
 

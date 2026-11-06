@@ -3,7 +3,8 @@
 Lê os arquivos grandes aos poucos (sem carregar tudo na memória) e gera CSVs
 pequenos, prontos para o Excel:
 
-  <var>_uf_horario.csv        cenário x hora, uma coluna por UF
+  <var>_uf_horario.csv        mês x cenário x hora, uma coluna por UF, no mesmo
+                              formato dos CSV exportados pelo SDDP/Graf
   <var>_uf_mensal.csv         cenário (e média) x mês x UF [x tecnologia]
   <var>_agente_mensal.csv     cada usina/barra x mês, média dos cenários
 
@@ -22,6 +23,9 @@ Opções:
   --saida PASTA     onde gravar os CSVs (padrão: <caso>\\resultados_uf)
   --uf-usina nome   usa a UF do nome da usina em vez da UF da barra de conexão
   --arquivos A B    processa só estes arquivos (ex.: --arquivos gergnd vergnd)
+  --estagios I F    processa só os estágios de I a F (ex.: --estagios 2 13)
+
+Os CSV usam vírgula como separador e ponto decimal, como os do SDDP.
 
 Requer Python 3 e numpy.
 """
@@ -93,17 +97,26 @@ def mes_ano(h, estagio):
 # ----------------------------------------------------------------------------
 def ler_tabela(caminho):
     with open(caminho, encoding='utf-8-sig', newline='') as f:
-        return list(csv.DictReader(f, delimiter=';'))
+        primeira = f.readline()
+        f.seek(0)
+        sep = ';' if primeira.count(';') > primeira.count(',') else ','
+        return list(csv.DictReader(f, delimiter=sep))
 
 
 def num(x):
-    """Número com vírgula decimal (Excel em português)."""
-    return ('%.3f' % x).replace('.', ',')
+    """Número com ponto decimal, como nos CSV do SDDP (6 algarismos significativos)."""
+    if x == 0:
+        return '0'
+    if abs(x) >= 1e5:
+        return '%.1f' % x
+    if abs(x) < 1e-4:
+        return ('%.8f' % x).rstrip('0').rstrip('.') or '0'
+    return '%.6g' % x
 
 
 def escrever_csv(caminho, cabecalho, linhas):
     with open(caminho, 'w', encoding='utf-8-sig', newline='') as f:
-        w = csv.writer(f, delimiter=';')
+        w = csv.writer(f, delimiter=',')
         w.writerow(cabecalho)
         w.writerows(linhas)
 
@@ -111,7 +124,7 @@ def escrever_csv(caminho, cabecalho, linhas):
 # ----------------------------------------------------------------------------
 # Processamento de uma variável
 # ----------------------------------------------------------------------------
-def processar(var, caso, saida, usinas, barras, uf_usina):
+def processar(var, caso, saida, usinas, barras, uf_usina, estagios=None):
     hdr = ler_hdr(os.path.join(caso, var + '.hdr'))
     arq_bin = os.path.join(caso, var + '.bin')
     if not os.path.exists(arq_bin):
@@ -163,51 +176,68 @@ def processar(var, caso, saida, usinas, barras, uf_usina):
     fator = 1000.0 if unidade.upper().startswith('GWH') else 1.0
     un_saida = 'MWh' if energia else unidade
 
+    ini, fim = estagios or (1, n_est)
+    if not 1 <= ini <= fim <= n_est:
+        sys.exit(f'ERRO: --estagios {ini} {fim} fora do intervalo 1 a {n_est} de {var}')
+    lista_est = list(range(ini - 1, fim))
+
+    # Arquivo horário no formato dos CSV do SDDP/Graf: 3 linhas de cabeçalho,
+    # colunas Mês,Cenários,Hora e uma coluna por UF. Em base horária, MWh na
+    # hora = MW médio, por isso a unidade aparece como MW.
     dados = np.memmap(arq_bin, dtype='<f4', mode='r')
-    f_hora = open(os.path.join(saida, f'{var}_uf_horario.csv'), 'w', encoding='utf-8-sig', newline='')
-    w_hora = csv.writer(f_hora, delimiter=';')
-    w_hora.writerow(['cenario', 'data_hora'] + [f'{u} ({un_saida})' for u in ufs])
+    un_hora = 'MW' if energia else unidade
+    n_col = 3 + len(ufs)
+    vazio = [''] * n_col
+    f_hora = open(os.path.join(saida, f'{var}_uf_horario.csv'), 'w', encoding='latin-1', newline='')
+    w_hora = csv.writer(f_hora, delimiter=',', lineterminator='\r\n')
+    w_hora.writerow((['Varies per block?       ', 2, 'Unit    ', un_hora.ljust(7), hdr['tipo_estagio'],
+                      hdr['mes_ini'], hdr['ano_ini']] + vazio)[:n_col])
+    w_hora.writerow((['Varies per sequence?    ', 1 if hdr['varia_cenario'] else 0] + vazio)[:n_col])
+    w_hora.writerow((['# of agents             ', len(ufs)] + vazio)[:n_col])
+    w_hora.writerow(['Mês', 'Cenários', 'Hora'] + [u.ljust(12) for u in ufs])
 
     mensal = np.zeros((n_cen, n_est, len(grupos)))   # soma (energia) ou média (MW)
     agente = np.zeros((n_est, n_ag))                  # média dos cenários
     inicio = time.time()
-    for e in range(n_est):
+    for e in lista_est:
         h0, h1 = hdr['horas'][e], hdr['horas'][e + 1]
         nh = h1 - h0
         mes, ano = mes_ano(hdr, e)
-        rotulos = [f'{ano}-{mes:02d}-{h // 24 + 1:02d} {h % 24:02d}:00' for h in range(nh)]
         bloco = dados[h0 * n_cen * n_ag:h1 * n_cen * n_ag].reshape(n_cen, nh, n_ag)
         for c in range(n_cen):
             x = np.asarray(bloco[c], dtype=np.float64) * fator        # horas x agentes
             por_uf = x @ M_uf
             for h in range(nh):
-                w_hora.writerow([c + 1, rotulos[h]] + [num(v) for v in por_uf[h]])
+                w_hora.writerow([e + 1, c + 1, h + 1] + [num(v) for v in por_uf[h]])
             red = x.sum(axis=0) if energia else x.mean(axis=0)        # por agente no mês
             mensal[c, e] = red @ M_grp
             agente[e] += red / n_cen
         dec = time.time() - inicio
-        print(f'  [{var}] estágio {e + 1}/{n_est} ({MESES[mes - 1]}/{ano}) ok - {dec:.0f} s')
+        print(f'  [{var}] estágio {e + 1} de {ini} a {fim} ({MESES[mes - 1]}/{ano}) ok - {dec:.0f} s')
     f_hora.close()
 
     # --- mensal por UF (e tecnologia) ---------------------------------------
     medida = 'energia_MWh' if energia else f'media_{un_saida}'
-    cab = ['cenario', 'ano', 'mes', 'uf'] + (['tecnologia'] if tec_ag else []) + [medida]
+    cab = ['estagio', 'ano', 'mes', 'cenario', 'uf'] + (['tecnologia'] if tec_ag else []) + [medida]
     linhas = []
-    for c in list(range(n_cen)) + ['media']:
-        valores = mensal.mean(axis=0) if c == 'media' else mensal[c]
-        for e in range(n_est):
-            mes, ano = mes_ano(hdr, e)
+    for e in lista_est:
+        mes, ano = mes_ano(hdr, e)
+        for c in list(range(n_cen)) + ['media']:
+            valores = mensal.mean(axis=0) if c == 'media' else mensal[c]
             for g, grp in enumerate(grupos):
-                linhas.append([c + 1 if c != 'media' else 'media', ano, mes, *grp, num(valores[e, g])])
+                linhas.append([e + 1, ano, mes, c + 1 if c != 'media' else 'media', *grp,
+                               num(valores[e, g])])
     escrever_csv(os.path.join(saida, f'{var}_uf_mensal.csv'), cab, linhas)
 
     # --- por agente, média dos cenários -------------------------------------
-    cols = [f'{MESES[mes_ano(hdr, e)[0] - 1]}/{mes_ano(hdr, e)[1]}' for e in range(n_est)]
-    cab = [tipo_agente, 'uf'] + (['tecnologia'] if tec_ag else []) + cols + ['total' if energia else 'media']
+    cols = [f'{MESES[mes_ano(hdr, e)[0] - 1]}/{mes_ano(hdr, e)[1]}' for e in lista_est]
+    medida = f'total_MWh' if energia else f'media_{un_saida}'
+    cab = [tipo_agente, 'uf'] + (['tecnologia'] if tec_ag else []) + cols + [medida]
+    horas_est = np.diff(hdr['horas'])[lista_est]
     linhas = []
     for i, n in enumerate(nomes):
-        v = agente[:, i]
-        tot = v.sum() if energia else (v * np.diff(hdr['horas'])).sum() / total_h
+        v = agente[lista_est, i]
+        tot = v.sum() if energia else (v * horas_est).sum() / horas_est.sum()
         linhas.append([n, uf_ag[i]] + ([tec_ag[i]] if tec_ag else []) + [num(x) for x in v] + [num(tot)])
     escrever_csv(os.path.join(saida, f'{var}_agente_mensal.csv'), cab, linhas)
 
@@ -230,6 +260,7 @@ def main():
     p.add_argument('--saida')
     p.add_argument('--uf-usina', choices=['barra', 'nome'], default='barra')
     p.add_argument('--arquivos', nargs='+')
+    p.add_argument('--estagios', nargs=2, type=int, metavar=('INICIAL', 'FINAL'))
     a = p.parse_args()
 
     caso = os.path.abspath(a.caso)
@@ -248,7 +279,7 @@ def main():
     if os.path.exists(os.path.join(saida, 'checagem.txt')):
         os.remove(os.path.join(saida, 'checagem.txt'))
     for v in variaveis:
-        processar(v, caso, saida, usinas, barras, a.uf_usina)
+        processar(v, caso, saida, usinas, barras, a.uf_usina, a.estagios)
     print('Fim. Arquivos gerados em', saida)
 
 

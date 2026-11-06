@@ -10,6 +10,7 @@ Fontes, em ordem de prioridade:
   5. area   - UF predominante na área elétrica (dbus.dat/darea.dat)
 
 Uso: python barras_uf.py <pasta_do_caso> <pasta_saida>
+CSV com vírgula como separador e ponto decimal, como os do SDDP.
 Saídas: barras_uf.csv, cargas_uf.csv, conexoes_usinas_uf.csv, resumo_uf.csv
 """
 import collections
@@ -255,7 +256,7 @@ def main(caso, saida):
     # --- saídas ---------------------------------------------------------------
     def escrever(nome, campos, linhas):
         with open(os.path.join(saida, nome), 'w', encoding='utf-8-sig', newline='') as f:
-            w = csv.DictWriter(f, fieldnames=campos, delimiter=';', extrasaction='ignore')
+            w = csv.DictWriter(f, fieldnames=campos, delimiter=',', extrasaction='ignore')
             w.writeheader()
             w.writerows(linhas)
 
