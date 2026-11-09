@@ -21,6 +21,15 @@ if "%EST%"=="" (
 if errorlevel 1 (
     echo.
     echo Algo deu errado. Copie as mensagens acima e envie para analise.
+    goto fim
 )
+echo.
+echo Gerando graficos de dia util x fim de semana/feriado...
+python graficos_semana.py "%PASTA%"
+if errorlevel 1 (
+    echo.
+    echo Algo deu errado. Copie as mensagens acima e envie para analise.
+)
+:fim
 echo.
 pause
