@@ -7,18 +7,19 @@ hrload??.dat do caso) são considerados sábado e domingo; os outros 5 são dias
 semana); sobra de 1 dia conta como dia útil.
 
 Nada é estimado: são usados só os valores horários de entrada (carga) e de
-saída (vertimento, geração renovável e injeção nas barras) do SDDP. As médias
-são feitas por semana: média dos dias úteis da semana e média dos dias de fim
-de semana da semana, para cada cenário.
+saída (vertimento, geração renovável e injeção nas barras) do SDDP, para cada
+um dos cenários.
 
 Gera, na pasta de saída:
-  semanas.csv                        dias úteis e de fim de semana de cada semana
-  semanal_<UF ou BR>.png             por semana: vertimento, geração e injeção
-                                     (box plot dos cenários) e carga do SIN (linhas)
-  semanal_valores.csv                os valores semanais por estado, cenário e tipo de dia
+  semanas.csv / dias.csv             semanas, tipo de cada dia e carga média do dia
+  diario/<var>/diario_<var>_<UF>.png por estado e variável (vertimento, geração,
+                                     injeção): 12 painéis (meses), cada dia = caixa
+                                     dos cenários; carga diária no eixo da direita
+  diario_valores.csv                 os valores diários por estado, cenário e tipo de dia
+  horario/horario_<UF>.png           por estado: 12 painéis (meses), perfil horário médio
+                                     do mês (dias úteis x fim de semana), vertimento em
+                                     caixas e carga no eixo da direita
   resumo_util_fds.png / .csv         média do ano: dia útil x fim de semana por estado
-  horario/<UF>/<UF>_<mm>.png         por mês: perfil horário de cada semana, vertimento
-                                     (box plot) e carga (linhas), dia útil x fim de semana
   correlacoes.png / .csv             correlações horárias entre carga, geração, vertimento
                                      e injeção, por estado
   carga_liquida_x_vertimento.png     vertimento x carga líquida do SIN, hora a hora
@@ -107,24 +108,6 @@ def montar_semanas(C):
     return semanas
 
 
-def media_semana(X, sem, tipo, energia):
-    """Por cenário: média diária dos dias do tipo na semana. X: [cen, mês, dia, hora, ...]."""
-    dias = sem[tipo]
-    if not dias:
-        return None
-    bloco = X[:, sem['mes'], dias]                       # [cen, dias, hora, ...]
-    diario = bloco.sum(axis=2) / 1000 if energia else bloco.mean(axis=2)   # GWh/dia ou MW
-    return diario.mean(axis=1)                            # [cen, ...]
-
-
-def perfil_semana(X, sem, tipo):
-    """Por cenário: perfil horário médio (MW) dos dias do tipo na semana."""
-    dias = sem[tipo]
-    if not dias:
-        return None
-    return X[:, sem['mes'], dias].mean(axis=1)            # [cen, hora, ...]
-
-
 # ----------------------------------------------------------------------------
 # Gráficos
 # ----------------------------------------------------------------------------
@@ -139,115 +122,165 @@ def _caixas(ax, dados, pos, cor, largura):
                medianprops=dict(color=TEXTO, linewidth=1.2))
 
 
-def _eixo_semanas(ax, semanas):
-    ax.set_xticks(range(len(semanas)), [s['rotulo'] if s['num'] == 1 else f'S{s["num"]}' for s in semanas],
-                  fontsize=7, rotation=90)
-    for i, s in enumerate(semanas):
-        if s['num'] == 1 and i:
-            ax.axvline(i - 0.5, color=GRADE, linewidth=1)
-    ax.set_xlim(-0.7, len(semanas) - 0.3)
-    ax.grid(axis='y', color=GRADE, linewidth=0.6)
-    ax.set_axisbelow(True)
+def tipo_dos_dias(semanas):
+    """Dicionário (mês, dia) -> 'util' ou 'fds'."""
+    t = {}
+    for s in semanas:
+        for d in s['util']:
+            t[(s['mes'], d)] = 'util'
+        for d in s['fds']:
+            t[(s['mes'], d)] = 'fds'
+    return t
 
 
-def grafico_semanal(nome, j, saidas, C, semanas, saida):
-    vars_ = [v for v in ('vergnd', 'gergnd', 'businj') if v in saidas]
-    fig, axs = plt.subplots(len(vars_) + 1, 1, figsize=(19, 3.3 * (len(vars_) + 1) + 0.8), sharex=True)
-    x = np.arange(len(semanas))
-    resumo = []
-    for ax, v in zip(axs, vars_):
-        X, _ = saidas[v]
-        energia = v != 'businj'
-        Xe = X[..., j] if j is not None else X.sum(axis=-1)
-        if v == 'businj' and j is None:
-            continue
-        util = [media_semana(Xe, s, 'util', energia) for s in semanas]
-        fds = [media_semana(Xe, s, 'fds', energia) for s in semanas]
-        _caixas(ax, util, x - 0.2, COR_UTIL, 0.34)
-        _caixas(ax, fds, x + 0.2, COR_FDS, 0.34)
-        if v == 'businj':
-            ax.axhline(0, color=TEXTO2, linewidth=0.8)
-        tit, un = VAR_INFO[v]
-        ax.set_title(f'{tit} ({un}) — caixa = 10 cenários (mínimo a máximo)', loc='left', fontsize=10)
-        ax.set_ylabel(un)
-        _eixo_semanas(ax, semanas)
-        resumo.append((v, util, fds))
-    if j is None and 'businj' in vars_:   # Brasil: injeção soma zero, painel removido
-        axs[len(vars_) - 1].remove()
-    ax = axs[-1]
-    cu = [C[s['mes'], s['util']].mean() / 1000 for s in semanas]
-    cf = [C[s['mes'], s['fds']].mean() / 1000 if s['fds'] else np.nan for s in semanas]
-    ax.plot(x, cu, color=COR_UTIL, linewidth=1.8, marker='o', markersize=3.5, label='dias úteis (5 dias)')
-    ax.plot(x, cf, color=COR_FDS, linewidth=1.8, marker='o', markersize=3.5, label='fim de semana (2 dias de menor carga)')
-    ax.set_title('Carga do SIN (GW médio, entrada do SDDP — igual em todos os cenários)', loc='left', fontsize=10)
-    ax.set_ylabel('GW')
-    from matplotlib.patches import Patch
-    fig.legend(handles=[Patch(facecolor=COR_UTIL + '66', edgecolor=COR_UTIL, label='dias úteis (5 dias da semana)'),
-                        Patch(facecolor=COR_FDS + '66', edgecolor=COR_FDS,
-                              label='fim de semana (2 dias de menor carga da semana)')],
-               loc='upper right', ncol=2, fontsize=9, frameon=False, bbox_to_anchor=(0.995, 0.995))
-    _eixo_semanas(ax, semanas)
-    titulo = 'Brasil' if j is None else f'{nome} ({REGIAO_DA_UF[nome]})'
-    fig.suptitle(f'{titulo} — dias úteis (azul) × fim de semana (laranja), semana a semana, 2030',
-                 x=0.01, ha='left', fontsize=13, fontweight='bold')
-    fig.text(0.01, 0.004, 'Fim de semana = os 2 dias de menor carga do SIN em cada semana do mês (dias 1-7, 8-14, ...; '
-             'na sobra 29-31, o dia de menor carga). Valores médios por dia em cada grupo.', fontsize=8, color=TEXTO2)
-    fig.tight_layout(rect=(0, 0.012, 1, 0.97))
-    fig.savefig(os.path.join(saida, f'semanal_{nome}.png'), dpi=120)
-    plt.close(fig)
-    return resumo
+def _carga_eixo_direito(ax, faixa_baixo=0.42):
+    """Cria o eixo secundário da carga e reserva a parte de cima do gráfico para ela.
+
+    As caixas (eixo da esquerda) ficam na parte de baixo e a carga (eixo da direita) na de
+    cima, para as duas não se sobreporem.
+    """
+    axc = ax.twinx()
+    axc.spines['right'].set_visible(True)
+    axc.spines['right'].set_color(GRADE)
+    axc.tick_params(axis='y', labelsize=7, colors=TEXTO2)
+    return axc
 
 
-def grafico_horario(nome, j, X, C, semanas, saida):
-    pasta = os.path.join(saida, 'horario', nome)
-    os.makedirs(pasta, exist_ok=True)
+def _ajusta_faixas(ax, axc, vmax, cmin, cmax, frac_caixas=0.58, frac_carga=0.40):
+    """Caixas ocupam os ~58% de baixo; carga ocupa os ~40% de cima."""
+    vmax = vmax if vmax > 0 else 1
+    ax.set_ylim(0, vmax / frac_caixas)
+    ax.set_yticks([t for t in ax.get_yticks() if 0 <= t <= vmax * 1.001])
+    amp = max(cmax - cmin, 1e-6)
+    baixo = cmin - amp * (1 - frac_carga) / frac_carga
+    axc.set_ylim(baixo, cmax + amp * 0.06)
+    axc.set_yticks([t for t in axc.get_yticks() if cmin - amp * 0.05 <= t <= cmax + amp * 0.06])
+
+
+def grafico_diario(nome, j, v, X, C, tipos, saida):
+    """Uma figura por estado e variável: 12 painéis (meses); cada dia = caixa dos 10 cenários."""
+    energia = v != 'businj'
+    tit, un = VAR_INFO[v]
     Xe = X[..., j] if j is not None else X.sum(axis=-1)
+    if energia:
+        diario = np.nansum(Xe, axis=3) / 1000          # [cen, mês, dia] GWh/dia
+    else:
+        diario = np.nanmean(Xe, axis=3)                # MW médio
+    fig, axs = plt.subplots(4, 3, figsize=(20, 17))
+    linhas = []
+    vmin_glob = np.nanmin(diario[:, 1:13]) if not energia else 0
+    vmax_glob = np.nanmax(diario[:, 1:13])
+    for m, ax in zip(range(1, 13), axs.ravel()):
+        nd = DIAS_MES[m - 1]
+        dias = np.arange(1, nd + 1)
+        for tp, cor in (('util', COR_UTIL), ('fds', COR_FDS)):
+            ds = [d for d in dias if tipos[(m, d)] == tp]
+            _caixas(ax, [diario[:, m, d] for d in ds], ds, cor, 0.7)
+        if not energia:
+            ax.axhline(0, color=TEXTO2, linewidth=0.8)
+        ax.set_xlim(0.3, nd + 0.7)
+        ax.set_xticks(dias, [str(d) if d % 2 else '' for d in dias], fontsize=7)
+        ax.grid(axis='y', color=GRADE, linewidth=0.6)
+        ax.set_axisbelow(True)
+        ax.set_title(f'{MESES[m - 1]}/2030', loc='left', fontsize=10, fontweight='bold')
+        if (m - 1) % 3 == 0:
+            ax.set_ylabel(un)
+        carga = C[m, 1:nd + 1].mean(axis=1) / 1000
+        axc = _carga_eixo_direito(ax)
+        axc.plot(dias, carga, color=TEXTO2, linewidth=1, linestyle='--', zorder=1)
+        cores = [COR_UTIL if tipos[(m, d)] == 'util' else COR_FDS for d in dias]
+        axc.scatter(dias, carga, c=cores, s=16, edgecolor=TEXTO, linewidth=0.5, marker='D', zorder=2)
+        diaria = C[1:13, 1:].mean(axis=2)              # NaN nos dias que não existem
+        cmin, cmax = np.nanmin(diaria) / 1000, np.nanmax(diaria) / 1000
+        if energia:
+            _ajusta_faixas(ax, axc, vmax_glob, cmin, cmax)
+        else:
+            amp = vmax_glob - vmin_glob
+            ax.set_ylim(vmin_glob - amp * 0.02, vmin_glob + amp / 0.58)
+            amp_c = cmax - cmin
+            axc.set_ylim(cmin - amp_c * 1.5, cmax + amp_c * 0.06)
+            axc.set_yticks([t for t in axc.get_yticks() if cmin - amp_c * 0.05 <= t <= cmax + amp_c * 0.06])
+        if m % 3 == 0:
+            axc.set_ylabel('Carga SIN (GW)', color=TEXTO2, fontsize=8)
+        for d in dias:
+            for c in range(diario.shape[0]):
+                linhas.append((nome, v, m, d, tipos[(m, d)], c + 1, diario[c, m, d]))
+    from matplotlib.patches import Patch
+    from matplotlib.lines import Line2D
+    fig.legend(handles=[Patch(facecolor=COR_UTIL + '66', edgecolor=COR_UTIL, label=f'{tit.split(" (")[0]} — dia útil'),
+                        Patch(facecolor=COR_FDS + '66', edgecolor=COR_FDS,
+                              label=f'{tit.split(" (")[0]} — fim de semana (2 dias de menor carga da semana)'),
+                        Line2D([], [], color=TEXTO2, linestyle='--', marker='D', markerfacecolor=FUNDO,
+                               markeredgecolor=TEXTO, label='carga média do dia no SIN (eixo da direita)')],
+               loc='upper right', ncol=3, fontsize=9, frameon=False, bbox_to_anchor=(0.995, 0.985))
+    titulo = 'Brasil' if j is None else f'{nome} ({REGIAO_DA_UF[nome]})'
+    fig.suptitle(f'{titulo} — {tit.lower()} por dia ({un}), 2030', x=0.01, y=0.985, ha='left',
+                 fontsize=14, fontweight='bold')
+    fig.text(0.01, 0.004, 'Caixa = 10 cenários (mínimo a máximo, linha = mediana). Eixo da esquerda: ' + un +
+             '; eixo da direita: carga do SIN (GW), entrada do SDDP, igual em todos os cenários.',
+             fontsize=8.5, color=TEXTO2)
+    fig.tight_layout(rect=(0, 0.01, 1, 0.955), h_pad=1.6, w_pad=2.5)
+    pasta = os.path.join(saida, 'diario', v)
+    os.makedirs(pasta, exist_ok=True)
+    fig.savefig(os.path.join(pasta, f'diario_{v}_{nome}.png'), dpi=110)
+    plt.close(fig)
+    return linhas
+
+
+def grafico_horario(nome, j, X, C, tipos, saida):
+    """Uma figura por estado: 12 painéis (meses); perfil horário médio do mês por tipo de dia."""
+    Xe = X[..., j] if j is not None else X.sum(axis=-1)       # [cen, mês, dia, hora]
+    fig, axs = plt.subplots(4, 3, figsize=(20, 17))
     horas = np.arange(1, 25)
+    perfis = {}
     for m in range(1, 13):
-        sems = [s for s in semanas if s['mes'] == m]
-        fig = plt.figure(figsize=(16, 4.4 * len(sems) + 1.0))
-        gs = fig.add_gridspec(len(sems) * 3, 1, height_ratios=[2.2, 1, 0.55] * len(sems), hspace=0.12)
-        ymax = np.nanmax(Xe[:, m]) * 1.02 if np.nanmax(Xe[:, m]) > 0 else 1
-        cmin, cmax = C[m, 1:DIAS_MES[m - 1] + 1].min() / 1000, C[m, 1:DIAS_MES[m - 1] + 1].max() / 1000
-        for k, s in enumerate(sems):
-            ax = fig.add_subplot(gs[3 * k])
-            axc = fig.add_subplot(gs[3 * k + 1], sharex=ax)
-            pu, pf = perfil_semana(Xe, s, 'util'), perfil_semana(Xe, s, 'fds')
-            if pu is not None:
-                _caixas(ax, [pu[:, h] for h in range(24)], horas - 0.18, COR_UTIL, 0.32)
-            if pf is not None:
-                _caixas(ax, [pf[:, h] for h in range(24)], horas + 0.18, COR_FDS, 0.32)
-            ax.set_ylim(0, ymax)
-            ax.grid(axis='y', color=GRADE, linewidth=0.6)
-            ax.set_axisbelow(True)
-            ax.set_ylabel('Vertim. (MW)')
-            dias_u = ','.join(str(x) for x in s['util'])
-            dias_f = ','.join(str(x) for x in s['fds']) or '—'
-            ax.set_title(f'{MESES[m - 1]} semana {s["num"]} — dias úteis: {dias_u} · fim de semana: {dias_f}',
-                         loc='left', fontsize=10, fontweight='bold')
-            plt.setp(ax.get_xticklabels(), visible=False)
-            axc.plot(horas, C[m, s['util']].mean(axis=0) / 1000, color=COR_UTIL, linewidth=1.8, marker='o',
-                     markersize=3, label='carga dias úteis')
-            if s['fds']:
-                axc.plot(horas, C[m, s['fds']].mean(axis=0) / 1000, color=COR_FDS, linewidth=1.8, marker='o',
-                         markersize=3, label='carga fim de semana')
-            axc.set_ylim(cmin * 0.97, cmax * 1.03)
-            axc.set_ylabel('Carga SIN (GW)')
-            axc.grid(color=GRADE, linewidth=0.6)
-            axc.set_axisbelow(True)
-            axc.set_xticks(horas)
-            axc.set_xlim(0.4, 24.6)
-            if k == 0:
-                axc.legend(loc='lower right', fontsize=8, frameon=False, ncol=2)
-        for axc_ in fig.axes[1::2]:
-            axc_.set_xlabel('Hora do dia (1 = 00h-01h)', fontsize=8)
-        titulo = 'Brasil' if j is None else nome
-        fig.suptitle(f'{titulo} — vertimento por hora (caixa = 10 cenários, azul = dias úteis, laranja = fim de semana) '
-                     f'e carga do SIN, {MESES[m - 1]}/2030', x=0.01, ha='left', fontsize=12, fontweight='bold')
-        fig.subplots_adjust(left=0.06, right=0.99, top=1 - 0.95 / fig.get_figheight(),
-                            bottom=0.1 / fig.get_figheight())
-        fig.savefig(os.path.join(pasta, f'{nome}_{m:02d}.png'), dpi=110)
-        plt.close(fig)
+        for tp in ('util', 'fds'):
+            ds = [d for d in range(1, DIAS_MES[m - 1] + 1) if tipos[(m, d)] == tp]
+            perfis[(m, tp)] = (Xe[:, m, ds].mean(axis=1), C[m, ds].mean(axis=0) / 1000, len(ds))
+    vmax = max(np.nanmax(p[0]) for p in perfis.values())
+    cmin = min(np.nanmin(p[1]) for p in perfis.values())
+    cmax = max(np.nanmax(p[1]) for p in perfis.values())
+    for m, ax in zip(range(1, 13), axs.ravel()):
+        axc = _carga_eixo_direito(ax)
+        for tp, cor, off in (('util', COR_UTIL, -0.19), ('fds', COR_FDS, 0.19)):
+            pv, pc, n = perfis[(m, tp)]
+            _caixas(ax, [pv[:, h] for h in range(24)], horas + off, cor, 0.34)
+            axc.plot(horas, pc, color=cor, linewidth=1.6, linestyle='--', marker='o', markersize=3,
+                     markerfacecolor=FUNDO, markeredgecolor=cor)
+        _ajusta_faixas(ax, axc, vmax, cmin, cmax)
+        ax.set_xlim(0.4, 24.6)
+        ax.set_xticks(horas, [str(h) if h % 2 else '' for h in horas], fontsize=7)
+        ax.grid(axis='y', color=GRADE, linewidth=0.6)
+        ax.set_axisbelow(True)
+        nu, nf = perfis[(m, 'util')][2], perfis[(m, 'fds')][2]
+        ax.set_title(f'{MESES[m - 1]}/2030  ·  {nu} dias úteis, {nf} de fim de semana', loc='left', fontsize=10,
+                     fontweight='bold')
+        if (m - 1) % 3 == 0:
+            ax.set_ylabel('Vertimento (MW)')
+        if m % 3 == 0:
+            axc.set_ylabel('Carga SIN (GW)', color=TEXTO2, fontsize=8)
+        if m > 9:
+            ax.set_xlabel('Hora do dia (1 = 00h-01h)', fontsize=8)
+    from matplotlib.patches import Patch
+    from matplotlib.lines import Line2D
+    fig.legend(handles=[Patch(facecolor=COR_UTIL + '66', edgecolor=COR_UTIL, label='vertimento — dia útil'),
+                        Patch(facecolor=COR_FDS + '66', edgecolor=COR_FDS, label='vertimento — fim de semana'),
+                        Line2D([], [], color=COR_UTIL, linestyle='--', marker='o', markerfacecolor=FUNDO,
+                               label='carga SIN — dia útil (eixo da direita)'),
+                        Line2D([], [], color=COR_FDS, linestyle='--', marker='o', markerfacecolor=FUNDO,
+                               label='carga SIN — fim de semana (eixo da direita)')],
+               loc='upper right', ncol=4, fontsize=9, frameon=False, bbox_to_anchor=(0.995, 0.985))
+    titulo = 'Brasil' if j is None else f'{nome} ({REGIAO_DA_UF[nome]})'
+    fig.suptitle(f'{titulo} — perfil horário médio de cada mês, 2030', x=0.01, y=0.985, ha='left',
+                 fontsize=14, fontweight='bold')
+    fig.text(0.01, 0.004, 'Média de todos os dias úteis (ou de fim de semana) do mês, para cada cenário; caixa = 10 '
+             'cenários (mínimo a máximo, linha = mediana). Fim de semana = 2 dias de menor carga de cada semana.',
+             fontsize=8.5, color=TEXTO2)
+    fig.tight_layout(rect=(0, 0.01, 1, 0.955), h_pad=1.6, w_pad=2.5)
+    pasta = os.path.join(saida, 'horario')
+    os.makedirs(pasta, exist_ok=True)
+    fig.savefig(os.path.join(pasta, f'horario_{nome}.png'), dpi=110)
+    plt.close(fig)
 
 
 def grafico_resumo(saidas, ufs, semanas, C, saida):
@@ -432,8 +465,6 @@ def main():
     p.add_argument('--caso', required=True, help='pasta do caso SDDP com os hrload??.dat')
     p.add_argument('--ano', type=int, default=2030)
     p.add_argument('--saida')
-    p.add_argument('--horario-min-gwh', type=float, default=1000,
-                   help='gera perfis horários mensais só para estados com vertimento anual ≥ este valor (GWh)')
     a = p.parse_args()
     saida = a.saida or os.path.join(a.pasta, 'analise_semana')
     os.makedirs(saida, exist_ok=True)
@@ -461,22 +492,25 @@ def main():
     if 'vergnd' not in saidas:
         sys.exit(f'ERRO: não achei vergnd_uf_horario.csv em {a.pasta}')
 
-    # semanal por estado e Brasil
+    tipos = tipo_dos_dias(semanas)
+    with open(os.path.join(saida, 'dias.csv'), 'w', encoding='utf-8-sig') as f:
+        f.write('mes,dia,semana,tipo_dia,carga_media_GW\n')
+        for s_ in semanas:
+            for d in sorted(s_['util'] + s_['fds']):
+                f.write(f'{s_["mes"]},{d},{s_["num"]},{tipos[(s_["mes"], d)]},{C[s_["mes"], d].mean() / 1000:.2f}\n')
+
+    # diário por estado e Brasil, para cada variável
     valores = []
-    for nm in ufs + ['BR']:
-        j = ufs.index(nm) if nm != 'BR' else None
-        res = grafico_semanal(nm, j, saidas, C, semanas, saida)
-        for v, util, fds in res:
-            for s, u_, f_ in zip(semanas, util, fds):
-                for tipo, arr in (('util', u_), ('fds', f_)):
-                    if arr is not None:
-                        for c, val in enumerate(arr):
-                            valores.append((nm, v, s['mes'], s['num'], tipo, c + 1, val))
-    with open(os.path.join(saida, 'semanal_valores.csv'), 'w', encoding='utf-8-sig') as f:
-        f.write('uf,variavel,mes,semana,tipo_dia,cenario,valor\n')
-        for nm, v, m, k, tipo, c, val in valores:
-            f.write(f'{nm},{v},{m},{k},{tipo},{c},{val:.4f}\n')
-    print('Gráficos semanais: ok')
+    for v, (X, _) in saidas.items():
+        for nm in ufs + ['BR']:
+            if nm == 'BR' and v == 'businj':
+                continue                      # a injeção do Brasil soma zero
+            valores += grafico_diario(nm, ufs.index(nm) if nm != 'BR' else None, v, X, C, tipos, saida)
+        print(f'Gráficos diários de {v}: ok')
+    with open(os.path.join(saida, 'diario_valores.csv'), 'w', encoding='utf-8-sig') as f:
+        f.write('uf,variavel,mes,dia,tipo_dia,cenario,valor\n')
+        for nm, v, m, d, tp, c, val in valores:
+            f.write(f'{nm},{v},{m},{d},{tp},{c},{val:.4f}\n')
 
     linhas = grafico_resumo(saidas, ufs, semanas, C, saida)
     print('Resumo: ok')
@@ -484,11 +518,9 @@ def main():
     print('Correlações: ok')
 
     X, _ = saidas['vergnd']
-    anual = {u: np.nansum(X[..., j]) / X.shape[0] / 1000 for j, u in enumerate(ufs)}
-    lista = ['BR'] + [u for u in ufs if anual[u] >= a.horario_min_gwh]
-    for nm in lista:
-        grafico_horario(nm, ufs.index(nm) if nm != 'BR' else None, X, C, semanas, saida)
-        print(f'Perfis horários mensais: {nm} ok')
+    for nm in ['BR'] + ufs:
+        grafico_horario(nm, ufs.index(nm) if nm != 'BR' else None, X, C, tipos, saida)
+    print('Perfis horários mensais: ok')
     br = [l_ for l_ in linhas if l_[0] == 'BR'][0]
     print(f'Brasil: {br[1]:.1f} GWh/dia em dia útil x {br[2]:.1f} GWh/dia em fim de semana ({br[3]:+.1f}%)')
     print('Fim. Arquivos em', saida)
