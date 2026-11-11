@@ -23,7 +23,7 @@ Dê dois cliques em  rodar_tudo.bat  e responda:
   2. Estágios para os gráficos por estado (ex.: 2 13 = jan a dez de 2030; Enter = todos)
   3. Ano (Enter = 2030)
 
-Ele roda as 4 etapas abaixo, em ordem, e grava tudo em  <pasta do caso>\resultados_uf.
+Ele roda as 5 etapas abaixo, em ordem, e grava tudo em  <pasta do caso>\resultados_uf.
 Leva alguns minutos (a etapa 1 lê os .bin de vários GB).
 
 
@@ -63,6 +63,20 @@ ETAPAS SEPARADAS (se quiser rodar só uma)
                                     carga diária no eixo da direita
      resumo_util_fds.png, correlacoes.png, carga_liquida_x_vertimento.png
      dias.csv, semanas.csv, diario_valores.csv, resumo_util_fds.csv, correlacoes.csv
+
+5. rodar_margem.bat  -> margem_barras.py
+   Para cada barra: capacidade = soma dos limites dos circuitos MONITORADOS ligados a ela
+   (+ conversores CA->CC). SEM margem = a injeção do SDDP (businj) passa da capacidade em
+   pelo menos 1 hora de 1 cenário do ano. Barras sem circuito monitorado ou com circuito
+   monitorado de limite 99999 = "sem limite no deck" (contam como COM margem).
+   Saídas em resultados_uf\margem_barras:
+     barras_margem.csv            cada barra: capacidade, injeção máx./média, horas acima, grupo
+     margem_limites_uf.csv        por estado: nº de barras e capacidade de cada grupo
+     businj_<grupo>_uf_horario.csv  injeção agregada por estado de cada grupo (formato SDDP)
+     margem_<UF>.png              barras sem margem (injeção x capacidade agregadas) e
+                                  barras com margem, por hora do dia
+     margem_resumo.png            resumo por estado
+   Lê o businj.bin inteiro duas vezes: leva alguns minutos.
 
 barras_uf.py (sem .bat) refaz as tabelas barras_uf.csv / usinas_renovaveis_uf.csv a partir
 do deck, se a rede mudar:  python barras_uf.py "<pasta do caso>" "<pasta de saída>"
