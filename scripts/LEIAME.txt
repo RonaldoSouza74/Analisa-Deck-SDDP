@@ -1,0 +1,79 @@
+PACOTE AGREGACAO_UF - análise por estado das saídas do SDDP
+===========================================================
+
+O QUE PRECISA
+-------------
+- Python 3 (python.org, marcando "Add python.exe to PATH" na instalação, ou Anaconda).
+- Pacotes numpy e matplotlib. No Prompt de Comando, uma vez só:
+      python -m pip install numpy matplotlib
+- A pasta do caso SDDP com:
+      * as saídas em .hdr + .bin: gergnd, vergnd, businj (ou bus_inj) e, se houver, bus_losses;
+      * os arquivos de entrada do deck: hrload??.dat, dcirc.dat, mcirc.dat, circstatus_b004m.dat,
+        dtrans.dat, mtrans.dat, transtatus_b004m.dat, ddcline.dat, mdcline.dat, dcnvlcc.dat,
+        mcnvlcc.dat, dclinestatus_b004m.dat, csumcirc.dat, sumcircub_b004m.dat.
+
+Os .bat e .py devem ficar todos nesta mesma pasta, junto com as tabelas
+barras_uf.csv, usinas_renovaveis_uf.csv e limites_uf.csv.
+
+
+JEITO MAIS SIMPLES: RODAR TUDO DE UMA VEZ
+-----------------------------------------
+Dê dois cliques em  rodar_tudo.bat  e responda:
+  1. Pasta do caso SDDP (ex.: C:\Estudo Curtailment SDDP\estudo_perdas_2025)
+  2. Estágios para os gráficos por estado (ex.: 2 13 = jan a dez de 2030; Enter = todos)
+  3. Ano (Enter = 2030)
+
+Ele roda as 4 etapas abaixo, em ordem, e grava tudo em  <pasta do caso>\resultados_uf.
+Leva alguns minutos (a etapa 1 lê os .bin de vários GB).
+
+
+ETAPAS SEPARADAS (se quiser rodar só uma)
+-----------------------------------------
+1. rodar_agregacao.bat  -> agrega_saidas_uf.py
+   Lê os .hdr/.bin do SDDP e soma por estado. Gera em <caso>\resultados_uf:
+     <var>_uf_horario.csv     mês x cenário x hora, uma coluna por estado (formato do SDDP)
+     <var>_uf_mensal.csv      mês x estado (x tecnologia), por cenário e média
+     <var>_agente_mensal.csv  cada usina/barra x mês, média dos cenários
+     checagem.txt             perfil da solar no 1º dia (tem que ser zero à noite)
+
+2. rodar_limites.bat  -> limites_uf.py
+   Soma a capacidade dos circuitos que cruzam a divisa de cada estado (linhas CA,
+   transformadores e elos CC em operação no ano). Gera limites_uf.csv,
+   limites_pares_uf.csv, circuitos_fronteira_uf.csv e restricoes_intercambio.csv.
+   Atenção: é a soma das capacidades de cada circuito, não a capacidade real de
+   transferência (o fluxo não se divide igualmente e há critérios de segurança).
+
+3. rodar_graficos.bat  -> graficos_uf.py
+   Gráficos em resultados_uf\graficos:
+     estado_<UF>.png                geração, vertimento e injeção por hora do dia (box plot),
+                                    com os limites de exportação/importação na injeção
+     boxplot_<var>_estados.png      os 27 estados num painel
+     mapa_calor_<var>_estados.png   média por mês x hora
+     injecao_x_vertimento.png       vertimento x injeção, hora a hora
+     ranking_estados.png            vertimento por estado (GWh e %)
+     vertimento_tecnologia.png e vertimento_uf_usina_x_barra.png
+                                    (precisam do vergnd_agente_mensal.csv na pasta)
+
+4. rodar_analise_semana.bat  -> analise_semana_carga.py
+   Fim de semana = os 2 dias de menor carga do SIN (hrload) em cada semana do mês.
+   Gráficos em resultados_uf\analise_semana:
+     horario\horario_<UF>.png       perfil horário médio de cada mês, dia útil x fim de
+                                    semana (vertimento em box plot, carga no eixo da direita)
+     diario\<var>\diario_<var>_<UF>.png  cada dia do ano, mês a mês (box plot dos cenários),
+                                    carga diária no eixo da direita
+     resumo_util_fds.png, correlacoes.png, carga_liquida_x_vertimento.png
+     dias.csv, semanas.csv, diario_valores.csv, resumo_util_fds.csv, correlacoes.csv
+
+barras_uf.py (sem .bat) refaz as tabelas barras_uf.csv / usinas_renovaveis_uf.csv a partir
+do deck, se a rede mudar:  python barras_uf.py "<pasta do caso>" "<pasta de saída>"
+
+
+SE DER ERRO
+-----------
+- "numpy/matplotlib não está instalado": rode  python -m pip install numpy matplotlib
+- "'python' não é reconhecido": reinstale o Python marcando "Add python.exe to PATH",
+  ou rode os .bat pelo Anaconda Prompt.
+- "o .bin tem X bytes, mas o .hdr indica Y": o .bin está incompleto ou é de outra rodada.
+- Qualquer outro: copie as mensagens da janela preta e envie para análise.
+
+Todos os CSV usam vírgula como separador e ponto decimal (como os CSV do SDDP).
