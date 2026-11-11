@@ -1,0 +1,25 @@
+﻿codigo,nome,limite_inferior_MW,limite_superior_MW,limite_superior_min_2030,limite_superior_max_2030
+1,EXPN CA,,8000,,
+2,NNSE->SE,,15600,19500.0,25000.0
+3,RECNE,,11000,,
+4,EXPNE,,13800,20500.0,21500.0
+5,RSUL CA,-7000,10500,,
+7,RSE,,10200,,
+8,FNS+Bip GAranha,-5000,4619.005,9419.081,9619.323
+9,XI->SE,,8000,5000.0,8000.0
+10,XI<-SE,,4200,,
+11,XI->MAN,-1000,740.7159,681.72,1286.399
+12,NE->N,-7800,6200,,
+13,NE->SE,-6000,8500.086,13000.71,14001.89
+14,TP->SE,,3600,,
+15,AC/RO->SE,,430,,
+16,AC/RO<-SE,,430,,
+17,MAD->SE,,6300,,
+100,Itaipu1,,,,
+101,Itaipu2,,,,
+102,Madeira1,,,,
+103,Madeira2,,,,
+106,GAranha,,,,
+107,B2B,,,,
+104,X_Estreito,,,,
+105,X_TRio,,,,

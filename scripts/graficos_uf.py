@@ -153,7 +153,17 @@ def painel_estados(var, d, saida):
     return nome
 
 
-def figura_estado(u, dados, saida):
+def ler_limites(caminho):
+    """limites_uf.csv (de limites_uf.py) -> {uf: (exportação MW, importação MW)}."""
+    import csv
+    if not caminho or not os.path.exists(caminho):
+        return {}
+    with open(caminho, encoding='utf-8-sig', newline='') as f:
+        return {r['uf']: (float(r['limite_exportacao_MW']), float(r['limite_importacao_MW']))
+                for r in csv.DictReader(f)}
+
+
+def figura_estado(u, dados, saida, limites=None):
     vars_ = [v for v in ('gergnd', 'vergnd', 'businj', 'bus_inj') if v in dados and u in dados[v]['ufs']]
     fig, axs = plt.subplots(len(vars_), 1, figsize=(11, 3.2 * len(vars_)), sharex=True, squeeze=False)
     for ax, v in zip(axs[:, 0], vars_):
@@ -163,6 +173,17 @@ def figura_estado(u, dados, saida):
         if v.startswith('bus'):
             ax.axhline(0, color=TEXTO2, linewidth=0.8)
             titulo = f'{VARS[v]["titulo"]} ({d["unidade"]}) — positivo = exporta'
+            if limites and u in limites:
+                exp, imp = limites[u]
+                lo, hi = ax.get_ylim()
+                lo, hi = min(lo, -imp), max(hi, exp)
+                ax.set_ylim(lo - 0.10 * (hi - lo), hi + 0.10 * (hi - lo))
+                for y, txt, va, dy in ((exp, f'limite de exportação: +{exp:,.0f} MW', 'top', -0.015),
+                                       (-imp, f'limite de importação: −{imp:,.0f} MW', 'bottom', 0.015)):
+                    ax.axhline(y, color=TEXTO, linewidth=1.3, linestyle='--')
+                    ax.text(0.6, y + dy * (hi - lo), txt.replace(',', '.'), va=va, ha='left', fontsize=8.5,
+                            color=TEXTO)
+                titulo += ' · tracejado = capacidade dos circuitos de divisa (rede do SDDP)'
         else:
             titulo = f'{VARS[v]["titulo"]} ({d["unidade"]}) — {energia_media_anual(d, i):,.0f} GWh no período'.replace(',', '.')
         ax.set_title(titulo, loc='left', fontsize=10)
@@ -482,6 +503,7 @@ def main():
     p.add_argument('pasta', help='pasta resultados_uf com os *_uf_horario.csv')
     p.add_argument('--saida', help='pasta dos gráficos (padrão: <pasta>\\graficos)')
     p.add_argument('--estagios', nargs=2, type=int, metavar=('INICIAL', 'FINAL'))
+    p.add_argument('--limites', help='limites_uf.csv gerado por limites_uf.py (padrão: procura na pasta)')
     p.add_argument('--tabelas', default=os.path.dirname(os.path.abspath(__file__)),
                    help='pasta com usinas_renovaveis_uf.csv (padrão: pasta deste script)')
     a = p.parse_args()
@@ -509,10 +531,14 @@ def main():
     r = injecao_x_vertimento(dados, saida)
     if r:
         print('Injeção x vertimento:', r)
+    arq_lim = a.limites or next((c for c in (os.path.join(a.pasta, 'limites_uf.csv'),
+                                             os.path.join(a.tabelas, 'limites_uf.csv')) if os.path.exists(c)), None)
+    limites = ler_limites(arq_lim)
+    print('Limites de exportação/importação:', arq_lim if limites else 'não encontrados (gráficos sem as linhas)')
     ufs = sorted(set(u for d in dados.values() for u in d['ufs']),
                  key=lambda u: ORDEM_UF.index(u) if u in ORDEM_UF else 99)
     for u in ufs:
-        figura_estado(u, dados, saida)
+        figura_estado(u, dados, saida, limites)
     print(f'Gráficos por estado: {len(ufs)} arquivos estado_<UF>.png')
     r = ranking(dados, saida)
     if r:
