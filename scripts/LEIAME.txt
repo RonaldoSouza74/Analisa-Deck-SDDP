@@ -23,7 +23,7 @@ Dê dois cliques em  rodar_tudo.bat  e responda:
   2. Estágios para os gráficos por estado (ex.: 2 13 = jan a dez de 2030; Enter = todos)
   3. Ano (Enter = 2030)
 
-Ele roda as 5 etapas abaixo, em ordem, e grava tudo em  <pasta do caso>\resultados_uf.
+Ele roda as 6 etapas abaixo, em ordem, e grava tudo em  <pasta do caso>\resultados_uf.
 Leva alguns minutos (a etapa 1 lê os .bin de vários GB).
 
 
@@ -77,6 +77,24 @@ ETAPAS SEPARADAS (se quiser rodar só uma)
                                   barras com margem, por hora do dia
      margem_resumo.png            resumo por estado
    Lê o businj.bin inteiro duas vezes: leva alguns minutos.
+
+6. rodar_gargalo.bat  -> gargalo_cmo.py
+   Separa o vertimento em GARGALO DE TRANSMISSÃO x EXCESSO NO SISTEMA (baixa demanda):
+   em cada hora e cenário, se o custo marginal (cmgbus) da barra da usina está mais de
+   1 $/MWh abaixo da mediana do custo marginal das barras do SIN, a usina está atrás de
+   um limite de rede (gargalo); senão, o vertimento é por sobra de energia no sistema.
+   Precisa na pasta do caso: cmgbus, vergnd (e, se houver, envetu = vertimento turbinável
+   das hidrelétricas, cmgsuc = restrições de intercâmbio, cmglnk = elos CC) em .hdr/.bin,
+   e chidro??.dat / hydrounit??.dat do deck.
+   Saídas em resultados_uf\gargalo_cmo:
+     gargalo_<UF>.png, gargalo_BR.png   vertimento por causa, por mês e por hora do dia,
+                                        e diferença de custo marginal nas horas com vertimento
+     gargalo_resumo.png                 vertimento por causa e estado
+     restricoes_ativas.png / .csv       % das horas com cada restrição de intercâmbio/elo CC
+                                        no limite, por mês
+     vertimento_causa_uf_mensal.csv, vertimento_causa_uf_tecnologia.csv,
+     vertimento_causa_usina.csv         os números por estado, tecnologia e usina
+   Opção: --tolerancia X (diferença mínima de custo marginal, em $/MWh; padrão 1).
 
 barras_uf.py (sem .bat) refaz as tabelas barras_uf.csv / usinas_renovaveis_uf.csv a partir
 do deck, se a rede mudar:  python barras_uf.py "<pasta do caso>" "<pasta de saída>"

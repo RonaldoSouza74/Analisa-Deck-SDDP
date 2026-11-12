@@ -6,6 +6,7 @@ rem   2) calcula os limites de exportacao/importacao de cada estado
 rem   3) gera os graficos por estado (box plots, mapas de calor, ranking...)
 rem   4) gera a analise de dias uteis x fins de semana
 rem   5) identifica as barras com e sem margem de escoamento
+rem   6) separa o vertimento por gargalo de transmissao x excesso no sistema (custo marginal)
 rem Deixe este arquivo na mesma pasta dos scripts .py e das tabelas .csv e de dois cliques nele.
 
 cd /d "%~dp0"
@@ -51,18 +52,18 @@ echo Ano: %ANO%
 
 if /i "%PULAR%"=="S" goto etapa2
 echo.
-echo ===== [1/5] Agregando as saidas do SDDP por estado =====
+echo ===== [1/6] Agregando as saidas do SDDP por estado =====
 python agrega_saidas_uf.py "%CASO%"
 if errorlevel 1 goto erro
 
 :etapa2
 echo.
-echo ===== [2/5] Limites de exportacao/importacao por estado =====
+echo ===== [2/6] Limites de exportacao/importacao por estado =====
 python limites_uf.py "%CASO%" "%~dp0." "%RES%" --ano %ANO%
 if errorlevel 1 goto erro
 
 echo.
-echo ===== [3/5] Graficos por estado =====
+echo ===== [3/6] Graficos por estado =====
 if not defined EST goto sem_estagios
 python graficos_uf.py "%RES%" --estagios %EST%
 goto depois_graficos
@@ -72,13 +73,18 @@ python graficos_uf.py "%RES%"
 if errorlevel 1 goto erro
 
 echo.
-echo ===== [4/5] Dias uteis x fins de semana =====
+echo ===== [4/6] Dias uteis x fins de semana =====
 python analise_semana_carga.py "%RES%" --caso "%CASO%" --ano %ANO%
 if errorlevel 1 goto erro
 
 echo.
-echo ===== [5/5] Margem de escoamento das barras =====
+echo ===== [5/6] Margem de escoamento das barras =====
 python margem_barras.py "%CASO%" --ano %ANO%
+if errorlevel 1 goto erro
+
+echo.
+echo ===== [6/6] Vertimento por gargalo x excesso no sistema (custo marginal) =====
+python gargalo_cmo.py "%CASO%" --ano %ANO%
 if errorlevel 1 goto erro
 
 echo.
@@ -86,6 +92,7 @@ echo Concluido. Resultados em: %RES%
 echo   graficos\          graficos por estado, mapas de calor, ranking
 echo   analise_semana\    dias uteis x fins de semana, correlacoes
 echo   margem_barras\     barras com e sem margem de escoamento
+echo   gargalo_cmo\       vertimento por gargalo de transmissao x excesso no sistema
 echo   limites_uf.csv     capacidade de exportacao/importacao por estado
 echo.
 pause
