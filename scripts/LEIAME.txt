@@ -96,6 +96,29 @@ ETAPAS SEPARADAS (se quiser rodar só uma)
      vertimento_causa_usina.csv         os números por estado, tecnologia e usina
    Opção: --tolerancia X (diferença mínima de custo marginal, em $/MWh; padrão 1).
 
+7. rodar_gargalo_linhas.bat  -> gargalo_cmo.py + gargalo_linhas.py
+   Roda a etapa 6 (custo marginal) e depois aponta QUAIS LINHAS E TRANSFORMADORES ficam
+   no limite, pelos fluxos do SDDP (acline_flow e transformer_flow) e pelos limites da
+   rede do deck no ano:
+     - circuito monitorado com fluxo >= 99% do limite = NO LIMITE; o lado "preso" é a
+       barra de custo marginal mais baixo; soma o vertimento por gargalo do estado do lado
+       preso nas horas em que o circuito estava no limite (coincidência, não divisão
+       exclusiva, pois vários circuitos podem estar no limite na mesma hora);
+     - circuito NÃO monitorado acima de 100% = SOBRECARGA que o SDDP não limita (gargalo
+       que a simulação não representa).
+   Saídas em resultados_uf\gargalo_linhas:
+     circuitos_no_limite.csv                    cada circuito: % das horas no limite (ano e
+                                                por mês), separando preços, sobrecarga,
+                                                carregamento máximo, lado preso, vertimento
+     gargalos_por_uf.csv                        por estado: circuitos no limite e % das horas
+                                                com vertimento por gargalo em que havia circuito
+                                                do estado no limite
+     circuitos_vertimento.png                   circuitos com mais vertimento coincidente
+     circuitos_horas_no_limite.png              circuitos mais tempo no limite
+     circuitos_sobrecarga_nao_monitorados.png   circuitos não monitorados em sobrecarga
+   Opções: --carregamento 99 (% do limite), --tolerancia 1 ($/MWh), --top 30.
+   Lê o cmgbus, o acline_flow e o transformer_flow (vários GB): leva alguns minutos.
+
 barras_uf.py (sem .bat) refaz as tabelas barras_uf.csv / usinas_renovaveis_uf.csv a partir
 do deck, se a rede mudar:  python barras_uf.py "<pasta do caso>" "<pasta de saída>"
 

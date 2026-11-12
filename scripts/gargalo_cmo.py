@@ -198,6 +198,14 @@ def main():
     idx_tec = {f_: np.array([tec_list.index(x[3]) for x in usinas[f_]]) for f_ in usinas}
     col = {f_: np.array([x[1] for x in usinas[f_]]) for f_ in usinas}
     rng = np.random.default_rng(0)
+    # usina -> estado (matriz indicadora) para o vertimento por gargalo hora a hora
+    ind_uf = {}
+    for f_ in usinas:
+        Mi = np.zeros((len(usinas[f_]), len(ufs)))
+        ok = idx_uf[f_] >= 0
+        Mi[np.nonzero(ok)[0], idx_uf[f_][ok]] = 1
+        ind_uf[f_] = Mi
+    garg_horario = []                                       # (estágio, cenário, horas x UF em MW)
 
     t0 = time.time()
     for k, e in enumerate(estagios):
@@ -209,6 +217,7 @@ def main():
             nh = P.shape[0]
             hd = np.arange(nh) % 24
             vert_br = np.zeros(nh)
+            garg_uf = np.zeros((nh, len(ufs)))
             for f_, h in fontes.items():
                 if h is None:
                     continue
@@ -220,6 +229,7 @@ def main():
                 vg = np.where(garg, V, 0.0)
                 vs = V - vg
                 vert_br += V.sum(axis=1)
+                garg_uf += vg @ ind_uf[f_]
                 for causa, X in ((0, vg), (1, vs)):
                     acc_usina[f_][causa] += X.sum(axis=0)
                     tot_us = X.sum(axis=0)
@@ -248,10 +258,25 @@ def main():
                 L = bloco(lnk, e, c)
                 ativ_lnk[:, m] += (np.abs(L) > 1e-9).sum(axis=0)
             horas_mes[m] += nh
+            garg_horario.append((e, c, garg_uf))
             n_horas += nh
         print(f'  {MESES[m]}/{a.ano} ok - {time.time() - t0:.0f} s')
 
     # --- saídas: CSV ---------------------------------------------------------------
+    # vertimento por gargalo (renovável + hidro) por estado, hora a hora, no formato do SDDP
+    with open(os.path.join(saida, 'vertimento_gargalo_uf_horario.csv'), 'w', encoding='latin-1', newline='') as f:
+        w = csv.writer(f, lineterminator='\r\n')
+        n_col = 3 + len(ufs)
+        vazio = [''] * n_col
+        w.writerow((['Varies per block?       ', 2, 'Unit    ', 'MW     ', cmg['tipo_estagio'], cmg['mes_ini'],
+                     cmg['ano_ini']] + vazio)[:n_col])
+        w.writerow((['Varies per sequence?    ', 1] + vazio)[:n_col])
+        w.writerow((['# of agents             ', len(ufs)] + vazio)[:n_col])
+        w.writerow(['Mês', 'Cenários', 'Hora'] + [u.ljust(12) for u in ufs])
+        for e, c, G in garg_horario:
+            for hh in range(G.shape[0]):
+                w.writerow([e + 1, c + 1, hh + 1] + ['%.6g' % v for v in G[hh]])
+
     nomes_f = {'ren': 'renovavel', 'hid': 'hidro_turbinavel'}
     with open(os.path.join(saida, 'vertimento_causa_uf_mensal.csv'), 'w', encoding='utf-8-sig', newline='') as f:
         w = csv.writer(f)
