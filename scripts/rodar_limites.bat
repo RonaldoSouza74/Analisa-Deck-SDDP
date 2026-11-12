@@ -14,7 +14,9 @@ set /p PASTA=Pasta resultados_uf:
 set PASTA=%PASTA:"=%
 echo.
 echo Ano da rede a considerar (Enter = 2030):
+set ANO=
 set /p ANO=Ano: 
+if not "%ANO%"=="" for /f "tokens=1 delims=-,; " %%a in ("%ANO%") do set ANO=%%a
 if "%ANO%"=="" set ANO=2030
 
 python limites_uf.py "%CASO%" "%~dp0." "%PASTA%" --ano %ANO%

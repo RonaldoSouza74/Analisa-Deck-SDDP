@@ -32,6 +32,7 @@ Requer Python 3 e numpy.
 import argparse
 import csv
 import os
+import re
 import struct
 import sys
 import time
@@ -260,8 +261,15 @@ def main():
     p.add_argument('--saida')
     p.add_argument('--uf-usina', choices=['barra', 'nome'], default='barra')
     p.add_argument('--arquivos', nargs='+')
-    p.add_argument('--estagios', nargs=2, type=int, metavar=('INICIAL', 'FINAL'))
+    p.add_argument('--estagios', nargs='+', metavar='N',
+                   help='estágio inicial e final (ex.: 2 13); textos extras são ignorados')
     a = p.parse_args()
+    if a.estagios:
+        # aproveita só os dois primeiros números (ex.: "2 13 para o ano de 2030" -> 2 13)
+        nums = [int(x) for x in re.findall(r'\d+', ' '.join(a.estagios))][:2]
+        if len(nums) != 2:
+            sys.exit(f'ERRO: --estagios precisa de dois números (ex.: 2 13); recebido: {" ".join(a.estagios)}')
+        a.estagios = nums
 
     caso = os.path.abspath(a.caso)
     saida = a.saida or os.path.join(caso, 'resultados_uf')

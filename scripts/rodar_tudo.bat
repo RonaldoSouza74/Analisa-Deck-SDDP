@@ -12,22 +12,50 @@ cd /d "%~dp0"
 echo.
 echo Cole o caminho da pasta do caso SDDP (com os .hdr/.bin das saidas e os hrload??.dat)
 echo e tecle Enter:
+set CASO=
 set /p CASO=Pasta do caso: 
 set CASO=%CASO:"=%
-echo.
-echo Estagios para os graficos por estado (ex.: 2 13 para o ano de 2030). Enter = todos:
-set /p EST=Estagios: 
-echo.
-echo Ano para os limites e para a analise de dias uteis x fim de semana (Enter = 2030):
-set /p ANO=Ano: 
-if "%ANO%"=="" set ANO=2030
 set RES=%CASO%\resultados_uf
 
+echo.
+echo Estagios para os graficos por estado: digite so os DOIS numeros separados por espaco.
+echo   Exemplo: 2 13   (estagios 2 a 13 = jan a dez de 2030).  Enter = todos os estagios.
+set EST=
+set E1=
+set E2=
+set /p EST=Estagios: 
+if not "%EST%"=="" for /f "tokens=1,2 delims=-,; " %%a in ("%EST%") do (
+    set E1=%%a
+    set E2=%%b
+)
+set EST=
+if defined E2 set EST=%E1% %E2%
+
+echo.
+echo Ano para os limites, dias uteis x fim de semana e margem das barras (Enter = 2030):
+set ANO=
+set /p ANO=Ano: 
+if not "%ANO%"=="" for /f "tokens=1 delims=-,; " %%a in ("%ANO%") do set ANO=%%a
+if "%ANO%"=="" set ANO=2030
+
+echo.
+echo A etapa 1 (agregacao dos .bin) ja foi feita para este caso?
+echo   Digite S para pular a etapa 1, ou so Enter para rodar tudo:
+set PULAR=
+set /p PULAR=Pular etapa 1 (S/Enter): 
+
+echo.
+echo Pasta do caso: %CASO%
+if defined EST (echo Estagios: %EST%) else (echo Estagios: todos)
+echo Ano: %ANO%
+
+if /i "%PULAR%"=="S" goto etapa2
 echo.
 echo ===== [1/5] Agregando as saidas do SDDP por estado =====
 python agrega_saidas_uf.py "%CASO%"
 if errorlevel 1 goto erro
 
+:etapa2
 echo.
 echo ===== [2/5] Limites de exportacao/importacao por estado =====
 python limites_uf.py "%CASO%" "%~dp0." "%RES%" --ano %ANO%
@@ -35,7 +63,7 @@ if errorlevel 1 goto erro
 
 echo.
 echo ===== [3/5] Graficos por estado =====
-if "%EST%"=="" goto sem_estagios
+if not defined EST goto sem_estagios
 python graficos_uf.py "%RES%" --estagios %EST%
 goto depois_graficos
 :sem_estagios

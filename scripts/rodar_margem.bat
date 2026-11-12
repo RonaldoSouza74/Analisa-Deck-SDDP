@@ -10,7 +10,9 @@ set /p CASO=Pasta do caso:
 set CASO=%CASO:"=%
 echo.
 echo Ano a analisar (Enter = 2030):
+set ANO=
 set /p ANO=Ano: 
+if not "%ANO%"=="" for /f "tokens=1 delims=-,; " %%a in ("%ANO%") do set ANO=%%a
 if "%ANO%"=="" set ANO=2030
 
 python margem_barras.py "%CASO%" --ano %ANO%

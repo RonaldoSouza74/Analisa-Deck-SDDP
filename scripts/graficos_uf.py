@@ -28,6 +28,7 @@ Requer numpy e matplotlib.
 """
 import argparse
 import os
+import re
 import sys
 
 try:
@@ -502,11 +503,18 @@ def main():
     p = argparse.ArgumentParser(description='Box plots por UF das saídas do SDDP.')
     p.add_argument('pasta', help='pasta resultados_uf com os *_uf_horario.csv')
     p.add_argument('--saida', help='pasta dos gráficos (padrão: <pasta>\\graficos)')
-    p.add_argument('--estagios', nargs=2, type=int, metavar=('INICIAL', 'FINAL'))
+    p.add_argument('--estagios', nargs='+', metavar='N',
+                   help='estágio inicial e final (ex.: 2 13); textos extras são ignorados')
     p.add_argument('--limites', help='limites_uf.csv gerado por limites_uf.py (padrão: procura na pasta)')
     p.add_argument('--tabelas', default=os.path.dirname(os.path.abspath(__file__)),
                    help='pasta com usinas_renovaveis_uf.csv (padrão: pasta deste script)')
     a = p.parse_args()
+    if a.estagios:
+        # aproveita só os dois primeiros números (ex.: "2 13 para o ano de 2030" -> 2 13)
+        nums = [int(x) for x in re.findall(r'\d+', ' '.join(a.estagios))][:2]
+        if len(nums) != 2:
+            sys.exit(f'ERRO: --estagios precisa de dois números (ex.: 2 13); recebido: {" ".join(a.estagios)}')
+        a.estagios = nums
     saida = a.saida or os.path.join(a.pasta, 'graficos')
     os.makedirs(saida, exist_ok=True)
 
