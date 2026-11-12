@@ -39,6 +39,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from graficos_uf import ler_horario, ORDEM_UF, REGIAO_DA_UF, MESES, TEXTO, TEXTO2, GRADE, FUNDO, plt, np  # noqa
 
 COR_UTIL, COR_FDS = '#2a78d6', '#eb6834'
+ANO = 2030          # ano analisado (definido em main pelo --ano)
 DIAS_MES = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 VAR_INFO = {'vergnd': ('Vertimento renovável', 'GWh/dia'),
             'gergnd': ('Geração renovável', 'GWh/dia'),
@@ -182,7 +183,7 @@ def grafico_diario(nome, j, v, X, C, tipos, saida):
         ax.set_xticks(dias, [str(d) if d % 2 else '' for d in dias], fontsize=7)
         ax.grid(axis='y', color=GRADE, linewidth=0.6)
         ax.set_axisbelow(True)
-        ax.set_title(f'{MESES[m - 1]}/2030', loc='left', fontsize=10, fontweight='bold')
+        ax.set_title(f'{MESES[m - 1]}/{ANO}', loc='left', fontsize=10, fontweight='bold')
         if (m - 1) % 3 == 0:
             ax.set_ylabel(un)
         carga = C[m, 1:nd + 1].mean(axis=1) / 1000
@@ -214,7 +215,7 @@ def grafico_diario(nome, j, v, X, C, tipos, saida):
                                markeredgecolor=TEXTO, label='carga média do dia no SIN (eixo da direita)')],
                loc='upper right', ncol=3, fontsize=9, frameon=False, bbox_to_anchor=(0.995, 0.985))
     titulo = 'Brasil' if j is None else f'{nome} ({REGIAO_DA_UF[nome]})'
-    fig.suptitle(f'{titulo} — {tit.lower()} por dia ({un}), 2030', x=0.01, y=0.985, ha='left',
+    fig.suptitle(f'{titulo} — {tit.lower()} por dia ({un}), {ANO}', x=0.01, y=0.985, ha='left',
                  fontsize=14, fontweight='bold')
     fig.text(0.01, 0.004, 'Caixa = 10 cenários (mínimo a máximo, linha = mediana). Eixo da esquerda: ' + un +
              '; eixo da direita: carga do SIN (GW), entrada do SDDP, igual em todos os cenários.',
@@ -253,7 +254,7 @@ def grafico_horario(nome, j, X, C, tipos, saida):
         ax.grid(axis='y', color=GRADE, linewidth=0.6)
         ax.set_axisbelow(True)
         nu, nf = perfis[(m, 'util')][2], perfis[(m, 'fds')][2]
-        ax.set_title(f'{MESES[m - 1]}/2030  ·  {nu} dias úteis, {nf} de fim de semana', loc='left', fontsize=10,
+        ax.set_title(f'{MESES[m - 1]}/{ANO}  ·  {nu} dias úteis, {nf} de fim de semana', loc='left', fontsize=10,
                      fontweight='bold')
         if (m - 1) % 3 == 0:
             ax.set_ylabel('Vertimento (MW)')
@@ -271,7 +272,7 @@ def grafico_horario(nome, j, X, C, tipos, saida):
                                label='carga SIN — fim de semana (eixo da direita)')],
                loc='upper right', ncol=4, fontsize=9, frameon=False, bbox_to_anchor=(0.995, 0.985))
     titulo = 'Brasil' if j is None else f'{nome} ({REGIAO_DA_UF[nome]})'
-    fig.suptitle(f'{titulo} — perfil horário médio de cada mês, 2030', x=0.01, y=0.985, ha='left',
+    fig.suptitle(f'{titulo} — perfil horário médio de cada mês, {ANO}', x=0.01, y=0.985, ha='left',
                  fontsize=14, fontweight='bold')
     fig.text(0.01, 0.004, 'Média de todos os dias úteis (ou de fim de semana) do mês, para cada cenário; caixa = 10 '
              'cenários (mínimo a máximo, linha = mediana). Fim de semana = 2 dias de menor carga de cada semana.',
@@ -330,7 +331,7 @@ def grafico_resumo(saidas, ufs, semanas, C, saida):
     ax.set_yticks(y, sel)
     ax.grid(axis='x', color=GRADE, linewidth=0.6)
     ax.set_axisbelow(True)
-    ax.set_xlabel('Vertimento médio por dia em 2030 (GWh/dia)')
+    ax.set_xlabel(f'Vertimento médio por dia em {ANO} (GWh/dia)')
     ax.set_title('Por estado — caixa = 10 cenários; % = fim de semana em relação ao dia útil', loc='left', fontsize=10)
     ax.plot([], [], color=COR_UTIL, linewidth=6, alpha=0.6, label=f'dias úteis ({nu} dias)')
     ax.plot([], [], color=COR_FDS, linewidth=6, alpha=0.6, label=f'fins de semana ({nf} dias)')
@@ -361,7 +362,7 @@ def grafico_resumo(saidas, ufs, semanas, C, saida):
     ax.set_axisbelow(True)
     ax.set_xlabel('GW')
     ax.set_title('Carga média do SIN (entrada do SDDP)', loc='left', fontsize=10)
-    fig.suptitle('Vertimento em dias úteis × fins de semana (2 dias de menor carga de cada semana), 2030',
+    fig.suptitle(f'Vertimento em dias úteis × fins de semana (2 dias de menor carga de cada semana), {ANO}',
                  x=0.01, ha='left', fontsize=13, fontweight='bold')
     fig.subplots_adjust(left=0.05, right=0.98, top=0.9, bottom=0.08, wspace=0.18)
     fig.savefig(os.path.join(saida, 'resumo_util_fds.png'), dpi=130)
@@ -370,7 +371,7 @@ def grafico_resumo(saidas, ufs, semanas, C, saida):
 
 
 def correlacoes(saidas, ufs, C, saida):
-    """Correlação horária (todas as horas de 2030 e todos os cenários)."""
+    """Correlação horária (todas as horas do ano e todos os cenários)."""
     V, _ = saidas['vergnd']
     G = saidas.get('gergnd', (None,))[0]
     B = saidas.get('businj', (None,))[0]
@@ -424,7 +425,7 @@ def correlacoes(saidas, ufs, C, saida):
         sp.set_visible(False)
     cb = fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02)
     cb.outline.set_visible(False)
-    fig.suptitle('Correlação horária em 2030 (todas as horas e cenários)', x=0.01, ha='left', fontsize=13,
+    fig.suptitle(f'Correlação horária em {ANO} (todas as horas e cenários)', x=0.01, ha='left', fontsize=13,
                  fontweight='bold')
     fig.text(0.01, 0.005, 'Carga = carga do SIN (hrload). Carga líquida = carga do SIN − renovável disponível no Brasil '
              '(geração + vertimento). Geração, vertimento e injeção = do estado. Estados com ≥ 50 GWh de vertimento.',
@@ -449,7 +450,7 @@ def correlacoes(saidas, ufs, C, saida):
         ax.set_axisbelow(True)
         ax.set_xlabel('Carga líquida do SIN (GW)')
         ax.set_ylabel('Vertimento (GW)')
-    fig.suptitle('Vertimento × carga líquida do SIN, hora a hora (2030, 10 cenários)', x=0.01, ha='left',
+    fig.suptitle(f'Vertimento × carga líquida do SIN, hora a hora ({ANO}, {ncen} cenários)', x=0.01, ha='left',
                  fontsize=13, fontweight='bold')
     fig.text(0.01, 0.005, 'Carga líquida = carga do SIN − renovável disponível no Brasil (geração + vertimento). '
              'Cor = quantidade de horas (escala log).', fontsize=8, color=TEXTO2)
@@ -466,6 +467,8 @@ def main():
     p.add_argument('--ano', type=int, default=2030)
     p.add_argument('--saida')
     a = p.parse_args()
+    global ANO
+    ANO = a.ano
     saida = a.saida or os.path.join(a.pasta, 'analise_semana')
     os.makedirs(saida, exist_ok=True)
 
