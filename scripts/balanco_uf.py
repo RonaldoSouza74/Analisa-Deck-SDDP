@@ -188,25 +188,43 @@ def main():
             base = np.zeros(24)
             # horas sem nenhum caso ficam em branco (NaN), em vez de aparecer como zero
             media = lambda v: np.array([v[m & (hd == h)].mean() if (m & (hd == h)).any() else np.nan for h in range(24)])
+            topo_ger = None
             for k in ('hid', 'ter', 'ren', 'garg', 'exc'):
+                if k == 'garg':
+                    topo_ger = base.copy()                          # topo da geração (sem o vertimento)
                 y = media(S[k])
                 ax.bar(horas, np.nan_to_num(y), bottom=base, width=larg, color=COR[k], edgecolor=FUNDO, linewidth=0.6,
                        label=ROT[k] if legenda else None, hatch='//' if k in ('garg', 'exc') else None)
                 base += np.nan_to_num(y)
-            ax.plot(horas, media(S['carga']), color=COR['carga'], linewidth=2, marker='o', markersize=3,
-                    label=ROT['carga'] if legenda else None)
-            ax.plot(horas, media(S['inj']), color=COR['inj'], linewidth=1.6, linestyle='--',
-                    label=ROT['inj'] + ' (geração − carga)' if legenda else None)
+            carga = media(S['carga'])
+            ok = np.isfinite(carga)
+            # faixa entre a carga e o topo da geração: o que sai do estado (ou o que entra, se faltar geração)
+            exp_ = np.where(ok, np.maximum(topo_ger - np.nan_to_num(carga), 0), 0)
+            imp_ = np.where(ok, np.maximum(np.nan_to_num(carga) - topo_ger, 0), 0)
+            # contorno (sem preenchimento, para não misturar com as cores das fontes); só onde há valor
+            for alt, base_, rot_, estilo in ((exp_, np.nan_to_num(carga), 'exportado (geração − carga): contorno roxo', '-'),
+                                             (imp_, topo_ger, 'importado (carga − geração): contorno roxo tracejado', '--')):
+                tem = alt > 1e-6
+                if tem.any():
+                    ax.bar(horas[tem], alt[tem], bottom=base_[tem], width=larg + 0.06, color='none',
+                           edgecolor=COR['inj'], linewidth=1.8, linestyle=estilo)
+            ax.plot(horas, carga, color=COR['carga'], linewidth=2, marker='o', markersize=3,
+                    label=ROT['carga'] + ' (abaixo dela: consumido no estado)' if legenda else None)
             ax.axhline(0, color=TEXTO2, linewidth=0.8)
             ax.set_xticks(horas, [str(h) if h % 2 else '' for h in horas])
             ax.set_xlim(0.4, 24.6)
             ax.grid(axis='y', color=GRADE, linewidth=0.6)
             ax.set_axisbelow(True)
         empilhado(ax, np.ones(n, bool), legenda=True)
-        ax.set_title('Média de todas as horas do ano (MW): geração por fonte + vertimento (hachurado) empilhados; '
-                     'linha preta = carga; tracejado roxo = injeção líquida', loc='left', fontsize=10)
+        ax.set_title('Média de todas as horas do ano (MW): geração por fonte empilhada; abaixo da linha preta = '
+                     'consumido no estado; contorno roxo = exportado; hachurado no topo = vertido', loc='left', fontsize=10)
         ax.set_ylabel('MW')
-        ax.legend(loc='upper left', fontsize=8, frameon=False, ncol=4, bbox_to_anchor=(0, -0.1))
+        from matplotlib.patches import Patch as _P
+        hs_, ls_ = ax.get_legend_handles_labels()
+        hs_ += [_P(facecolor='none', edgecolor=COR['inj'], linewidth=1.8, label='exportado (geração − carga)'),
+                _P(facecolor='none', edgecolor=COR['inj'], linewidth=1.8, linestyle='--',
+                   label='importado (carga − geração)')]
+        ax.legend(handles=hs_, loc='upper left', fontsize=8, frameon=False, ncol=4, bbox_to_anchor=(0, -0.1))
         # 2) mesmo balanço separado pela situação da hora
         for j, (s_, rot) in enumerate(SIT):
             ax = fig.add_subplot(gs[1, j])

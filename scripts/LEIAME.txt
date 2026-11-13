@@ -139,8 +139,9 @@ ETAPAS SEPARADAS (se quiser rodar só uma)
    Precisa na pasta do caso: gerhid, gerter e demxba (.hdr/.bin); chidro??, ctermi??,
    hydrounit?? e thermunit??.dat do deck; e os resultados das etapas 1 e 6 em resultados_uf.
    Saídas em resultados_uf\balanco_uf:
-     balanco_<UF>.png          média por hora do dia: geração por fonte + vertimento empilhados,
-                               carga e injeção; o mesmo separado em horas com gargalo, só com
+     balanco_<UF>.png          média por hora do dia: geração por fonte empilhada (abaixo da linha
+                               preta da carga = consumido no estado; contorno roxo = exportado;
+                               hachurado no topo = vertido); o mesmo separado em horas com gargalo, só com
                                excesso e sem vertimento; térmica, hidro e outros por situação
      balanco_resumo.png        vertimento x geração hidro e térmica do estado nas mesmas horas
      balanco_situacao_uf.csv   médias (MW) e energia (GWh) de cada parcela por estado e situação
