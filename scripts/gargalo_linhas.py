@@ -74,13 +74,240 @@ def ler_horario_sddp(caminho):
     with open(caminho, encoding='latin-1') as f:
         linhas = f.readlines()
     ufs = [c.strip() for c in linhas[3].split(',')][3:]
-    dados = np.loadtxt(linhas[4:], delimiter=',', ndmin=2)
+    dados = np.atleast_2d(np.genfromtxt(linhas[4:], delimiter=','))
     out = {}
     for (e, c) in sorted({(int(a), int(b)) for a, b in dados[:, :2]}):
         m = (dados[:, 0] == e) & (dados[:, 1] == c)
         bloco_ = dados[m]
         out[(e - 1, c - 1)] = bloco_[np.argsort(bloco_[:, 2])][:, 3:]
     return out, ufs
+
+
+CORES_CIRC = ['#2a78d6', '#eb6834', '#1baf7a', '#6250d6']      # paleta categórica (ordem fixa)
+COR_EXC, COR_INJ_SEM = '#8a8984', '#2a78d6'
+
+
+def quantil_hist(hist, q, NB, PASSO):
+    """hist: [24, NB] -> quantil q (0-1) do carregamento em % para cada hora."""
+    out = np.full(24, np.nan)
+    for h in range(24):
+        n = hist[h].sum()
+        if n:
+            acum = np.cumsum(hist[h])
+            b = int(np.searchsorted(acum, q * n))
+            out[h] = 100 * min(b, NB - 1) * PASSO          # início da faixa (100% aparece como 100%)
+    return out
+
+
+def serie_ano(dic, estagios, n_cen, j):
+    """Junta, para a coluna j, as matrizes horárias {(estágio, cenário): horas x UF} do ano."""
+    vals, hd, mes = [], [], []
+    for e in estagios:
+        for c in range(n_cen):
+            M = dic.get((e, c))
+            if M is None:
+                continue
+            vals.append(M[:, j])
+            hd.append(np.arange(M.shape[0]) % 24)
+            mes.append(np.full(M.shape[0], e))
+    if not vals:
+        return None, None, None
+    return np.concatenate(vals), np.concatenate(hd), np.concatenate(mes)
+
+
+def _caixas(ax, dados, pos, cor, larg):
+    ax.boxplot(dados, positions=pos, widths=larg, whis=(5, 95), showfliers=False, showmeans=True,
+               patch_artist=True, manage_ticks=False,
+               boxprops=dict(facecolor=cor + '55', edgecolor=cor, linewidth=0.9),
+               whiskerprops=dict(color=cor, linewidth=0.9), capprops=dict(color=cor, linewidth=0.9),
+               medianprops=dict(color=TEXTO, linewidth=1.3),
+               meanprops=dict(marker='D', markersize=3, markerfacecolor=TEXTO, markeredgecolor=FUNDO))
+
+
+def graficos_horarios(a, saida, estagios, n_cen, ref, elems, acc, linhas, NB, PASSO):
+    """Por estado, hora do dia no eixo x: vertimento por causa, injeção líquida por situação da hora,
+    diferença de CMO, carregamento das principais linhas e mapa mês x hora."""
+    from matplotlib.colors import LinearSegmentedColormap
+    from matplotlib.patches import Patch
+    from matplotlib.lines import Line2D
+    pasta_g = a.gargalo or os.path.join(a.caso, 'resultados_uf', 'gargalo_cmo')
+    dados = {}
+    for chave, arq in (('garg', 'vertimento_gargalo_uf_horario.csv'), ('exc', 'vertimento_excesso_uf_horario.csv'),
+                       ('dif', 'cmo_diferenca_uf_horario.csv')):
+        cam = os.path.join(pasta_g, arq)
+        dados[chave] = ler_horario_sddp(cam) if os.path.exists(cam) else ({}, [])
+    cam_inj = next((os.path.join(a.caso, 'resultados_uf', n) for n in ('businj_uf_horario.csv', 'bus_inj_uf_horario.csv')
+                    if os.path.exists(os.path.join(a.caso, 'resultados_uf', n))), None)
+    dados['inj'] = ler_horario_sddp(cam_inj) if cam_inj else ({}, [])
+    if not dados['garg'][1]:
+        print('  AVISO: sem os arquivos horários do gargalo_cmo; gráficos horários por estado não gerados')
+        return
+    if not cam_inj:
+        print('  AVISO: sem businj_uf_horario.csv em resultados_uf (etapa 1); painel de injeção fica de fora')
+    pasta = os.path.join(saida, 'horario_por_estado')
+    os.makedirs(pasta, exist_ok=True)
+    horas = np.arange(1, 25)
+    dispersao = {}
+
+    for uf in ORDEM_UF:
+        ser = {}
+        for chave in ('garg', 'exc', 'dif', 'inj'):
+            dic, ufs_ = dados[chave]
+            ser[chave] = serie_ano(dic, estagios, n_cen, ufs_.index(uf)) if uf in ufs_ else (None, None, None)
+        g, hd, est = ser['garg']
+        x = ser['exc'][0]
+        if g is None or x is None or (np.nansum(g) + np.nansum(x)) <= 0:
+            continue
+        # circuitos do estado: monitorados (mais vertimento do lado preso no estado, mais horas no limite,
+        # maior carregamento) e não monitorados com sobrecarga
+        cand_m, cand_n = [], []
+        for tipo, E in elems.items():
+            A = acc[tipo]
+            for k in E['com_lim']:
+                if uf not in (E['ufde'][k], E['ufpa'][k]):
+                    continue
+                hist = A['hist'][E['pos_lim'][k]]
+                p95 = quantil_hist(hist, 0.95, NB, PASSO)
+                lado = ORDEM_UF[int(A['lado_baixo'][k][:len(ORDEM_UF)].argmax())] if A['lado_baixo'][k].sum() else ''
+                info = dict(tipo=tipo, k=k, nome=E['info'][k]['nome'], ufs=f'{E["ufde"][k]}-{E["ufpa"][k]}',
+                            hlim=A['h_lim'][k].sum(), hsob=A['h_sobre'][k].sum(), p95max=np.nanmax(p95),
+                            vert=A['vert'][k] if lado == uf else 0.0, lado=lado, hist=hist, lim=E['lim'][k])
+                (cand_m if E['mon'][k] else cand_n).append(info)
+        cand_m.sort(key=lambda d: (d['vert'], d['hlim'], d['p95max']), reverse=True)
+        cand_n = sorted([d for d in cand_n if d['hsob'] > 0], key=lambda d: (d['hsob'], d['p95max']), reverse=True)
+        top_m, top_n = cand_m[:4], cand_n[:3]
+        inj = ser['inj'][0]
+        n_pain = 4 + (1 if inj is not None else 0) + (1 if top_n else 0)
+        alturas = [1] * n_pain
+        fig, axs = plt.subplots(n_pain, 1, figsize=(12, 3.1 * n_pain + 1.6),
+                                gridspec_kw=dict(hspace=0.62, height_ratios=alturas))
+        k_ax = 0
+        # 1) vertimento por causa
+        ax = axs[k_ax]; k_ax += 1
+        _caixas(ax, [g[hd == h] for h in range(24)], horas - 0.19, COR_LIM, 0.34)
+        _caixas(ax, [x[hd == h] for h in range(24)], horas + 0.19, COR_EXC, 0.34)
+        tg, tx = np.nansum(g) / n_cen / 1000, np.nansum(x) / n_cen / 1000
+        ax.set_title(f'Vertimento por hora (MW) — vermelho: gargalo de transmissão ({tg:,.0f} GWh) · cinza: excesso '
+                     f'no sistema / falta de demanda ({tx:,.0f} GWh)'.replace(',', '.'), loc='left', fontsize=9.5)
+        ax.set_ylabel('MW')
+        # 2) injeção líquida por situação da hora
+        if inj is not None:
+            ax = axs[k_ax]; k_ax += 1
+            sit_g = g > 1
+            sit_x = ~sit_g & (x > 1)
+            sit_0 = ~sit_g & ~sit_x
+            for msk, cor, off in ((sit_g, COR_LIM, -0.27), (sit_x, COR_EXC, 0.0), (sit_0, COR_INJ_SEM, 0.27)):
+                grupos = [inj[msk & (hd == h)] for h in range(24)]
+                ok = [i for i, gr in enumerate(grupos) if len(gr)]
+                if ok:
+                    _caixas(ax, [grupos[i] for i in ok], horas[ok] + off, cor, 0.24)
+            ax.axhline(0, color=TEXTO2, linewidth=0.8)
+            ax.set_title('Injeção líquida do estado (MW, positivo = exporta) conforme a hora — vermelho: com vertimento '
+                         'por gargalo · cinza: só por excesso · azul: sem vertimento', loc='left', fontsize=9.5)
+            ax.set_ylabel('MW')
+            dispersao[uf] = (inj, g, x)
+        # 3) diferença de CMO
+        ax = axs[k_ax]; k_ax += 1
+        d_, hd_d, _ = ser['dif']
+        if d_ is not None:
+            _caixas(ax, [d_[(hd_d == h) & np.isfinite(d_)] for h in range(24)], horas, '#6250d6', 0.6)
+        ax.axhline(0, color=TEXTO2, linewidth=0.8)
+        ax.axhline(-a.tolerancia, color=TEXTO, linewidth=1.1, linestyle='--')
+        ax.set_title(f'CMO mediano das barras do estado − CMO do SIN ($/MWh) — abaixo do tracejado (−{a.tolerancia:g}) '
+                     f'= energia presa por gargalo', loc='left', fontsize=9.5)
+        ax.set_ylabel('$/MWh')
+        # 4) carregamento das principais linhas monitoradas
+        def painel_circ(ax, lista, titulo):
+            for i, d in enumerate(lista):
+                cor = CORES_CIRC[i % len(CORES_CIRC)]
+                ax.plot(horas, quantil_hist(d['hist'], 0.5, NB, PASSO), color=cor, linewidth=2)
+                ax.plot(horas, quantil_hist(d['hist'], 0.95, NB, PASSO), color=cor, linewidth=1, linestyle=':')
+            ax.axhline(100, color=TEXTO, linewidth=1.2, linestyle='--')
+            ax.set_ylabel('% do limite')
+            ax.set_title(titulo, loc='left', fontsize=9.5)
+            hand = [Line2D([], [], color=CORES_CIRC[i % 4], linewidth=2,
+                           label=f'{d["nome"][:30]} ({d["ufs"]}, {d["lim"]:,.0f} MW'.replace(',', '.')
+                           + (f'; {100 * d["hlim"] / (len(g)):.1f}% h no limite; preso: {d["lado"]})'.replace('.', ',')
+                              if d['tipo'] and d['hlim'] else (f'; {100 * d["hsob"] / len(g):.1f}% h acima)'.replace('.', ',')
+                                                              if d['hsob'] else ')')))
+                    for i, d in enumerate(lista)]
+            hand.append(Line2D([], [], color=TEXTO2, linewidth=1, linestyle=':', label='pontilhado = 95% das horas abaixo'))
+            ax.legend(handles=hand, loc='upper left', fontsize=7, frameon=False, ncol=2, bbox_to_anchor=(0, -0.13),
+                      borderaxespad=0)
+        ax = axs[k_ax]; k_ax += 1
+        if top_m:
+            painel_circ(ax, top_m, 'Carregamento das principais linhas/transformadores MONITORADOS do estado (% do '
+                                   'limite; linha cheia = mediana) — tracejado = limite')
+        else:
+            ax.text(0.5, 0.5, 'nenhum circuito monitorado com limite ligado ao estado', ha='center', va='center',
+                    color=TEXTO2, transform=ax.transAxes)
+        if top_n:
+            ax = axs[k_ax]; k_ax += 1
+            painel_circ(ax, top_n, 'Circuitos NÃO monitorados do estado acima de 100% (o SDDP não limita esses '
+                                   'circuitos)')
+        # 5) mapa mês x hora do vertimento por gargalo
+        ax = axs[k_ax]
+        est_u = sorted(set(est))
+        Mx = np.array([[np.nanmean(g[(est == e) & (hd == h)]) for h in range(24)] for e in est_u])
+        cmap = LinearSegmentedColormap.from_list('seq', [FUNDO, COR_LIM, '#3a1010'])
+        im = ax.imshow(Mx, aspect='auto', cmap=cmap, vmin=0, vmax=max(np.nanmax(Mx), 1e-9), interpolation='nearest',
+                       extent=(0.5, 24.5, len(est_u) - 0.5, -0.5))
+        ax.set_yticks(range(len(est_u)), [f'{MESES[mes_ano(ref, e)[0] - 1]}' for e in est_u], fontsize=7)
+        cb = fig.colorbar(im, ax=ax, fraction=0.02, pad=0.01)
+        cb.outline.set_visible(False)
+        ax.set_title('Vertimento por gargalo médio (MW) por mês e hora do dia', loc='left', fontsize=9.5)
+        for ax in axs:
+            ax.set_xticks(horas, [str(h) if h % 2 else '' for h in horas])
+            ax.set_xlim(0.4, 24.6)
+            if ax is not axs[-1]:
+                ax.grid(axis='y', color=GRADE, linewidth=0.6)
+                ax.set_axisbelow(True)
+        axs[-1].set_xlabel('Hora do dia (1 = 00h-01h)')
+        fig.suptitle(f'{uf} — vertimento, injeção, CMO e carregamento das linhas por hora do dia, {a.ano}',
+                     x=0.01, y=1 - 0.25 / fig.get_figheight(), ha='left', fontsize=13, fontweight='bold')
+        fig.text(0.01, 0.004, f'Caixas: 25-75%, bigodes 5-95%, losango = média, com todas as horas do ano e os '
+                 f'{n_cen} cenários. Gargalo = CMO da barra da usina abaixo do CMO do SIN (gargalo_cmo).',
+                 fontsize=7.5, color=TEXTO2)
+        # espaço extra abaixo dos painéis de circuitos para a legenda
+        fig.subplots_adjust(left=0.07, right=0.97, top=1 - 1.0 / fig.get_figheight(), bottom=0.75 / fig.get_figheight(),
+                            hspace=0.62 + 0.25 * (1 if top_m else 0))
+        fig.savefig(os.path.join(pasta, f'horario_{uf}.png'), dpi=115)
+        plt.close(fig)
+
+    # dispersão: injeção líquida x vertimento por causa, estados com mais vertimento
+    if dispersao:
+        tops = sorted(dispersao, key=lambda u: -(np.nansum(dispersao[u][1]) + np.nansum(dispersao[u][2])))[:6]
+        fig, axs = plt.subplots(len(tops), 2, figsize=(13, 3.3 * len(tops) + 0.8), squeeze=False)
+        for i, uf in enumerate(tops):
+            inj, g, x = dispersao[uf]
+            for j_, (v, cor, nome) in enumerate(((g, COR_LIM, 'por gargalo'), (x, COR_EXC, 'por excesso no sistema'))):
+                ax = axs[i, j_]
+                ok = v > 1
+                cmap = LinearSegmentedColormap.from_list('seq', [FUNDO, cor, TEXTO])
+                if ok.sum() > 10 and len(np.unique(np.round(inj[ok]))) > 20 and len(np.unique(np.round(v[ok]))) > 20:
+                    ax.hexbin(inj[ok], v[ok], gridsize=40, bins='log', mincnt=1, cmap=cmap, linewidths=0)
+                elif ok.any():
+                    ax.scatter(inj[ok], v[ok], s=12, color=cor, alpha=0.5, edgecolor='none')
+                else:
+                    ax.text(0.5, 0.5, f'sem horas com vertimento {nome}', ha='center', va='center', color=TEXTO2,
+                            transform=ax.transAxes)
+                    ax.set_xticks([])
+                    ax.set_yticks([])
+                ax.axvline(0, color=TEXTO2, linewidth=0.8)
+                ax.set_title(f'{uf} — vertimento {nome} × injeção líquida ({100 * ok.mean():.1f}% das horas com '
+                             f'vertimento)'.replace('.', ','), loc='left', fontsize=9.5)
+                ax.set_xlabel('Injeção líquida do estado (MW, positivo = exporta)')
+                ax.set_ylabel('Vertimento (MW)')
+                ax.grid(color=GRADE, linewidth=0.6)
+                ax.set_axisbelow(True)
+        fig.suptitle(f'Vertimento por causa × injeção líquida do estado, hora a hora, {a.ano}', x=0.01, ha='left',
+                     fontsize=13, fontweight='bold')
+        fig.text(0.01, 0.004, 'Cor = quantidade de horas (escala log), só horas com vertimento > 1 MW. Gargalo com '
+                 'injeção alta = estado exportando no limite da rede; excesso com injeção baixa = falta de demanda.',
+                 fontsize=7.5, color=TEXTO2)
+        fig.tight_layout(rect=(0, 0.015, 1, 1 - 0.55 / fig.get_figheight()))
+        fig.savefig(os.path.join(saida, 'injecao_x_vertimento_causa.png'), dpi=120)
+        plt.close(fig)
 
 
 def main():
@@ -163,6 +390,10 @@ def main():
         n = len(E['info'])
         acc[tipo] = dict(h_lim=np.zeros((n, 12)), h_sep=np.zeros(n), h_sobre=np.zeros((n, 12)),
                          cmax=np.zeros(n), vert=np.zeros(n), lado_baixo=np.zeros((n, len(lista_uf))))
+    NB, PASSO = 61, 0.025                       # faixas de carregamento: 0-150% de 2,5 em 2,5% + acima de 150%
+    for tipo, E in elems.items():
+        E['com_lim'] = np.nonzero(np.isfinite(E['lim']))[0]
+        acc[tipo]['hist'] = np.zeros(len(E['com_lim']) * 24 * NB, dtype=np.int64)
     horas_mes = np.zeros(12)
     uf_garg_horas = collections.Counter()      # UF -> horas com vertimento por gargalo
     uf_garg_com_linha = collections.Counter()  # UF -> horas com vertimento por gargalo e algum circuito da UF no limite
@@ -185,6 +416,11 @@ def main():
                     sobre = (car > 1.0) & ~E['mon']
                 A['h_lim'][:, m] += no_lim.sum(axis=0)
                 A['h_sobre'][:, m] += sobre.sum(axis=0)
+                cl = car[:, E['com_lim']]
+                faixa = np.minimum((cl / PASSO).astype(np.int64), NB - 1)
+                hd_ = (np.arange(nh) % 24)[:, None]
+                plano = ((np.arange(cl.shape[1])[None, :] * 24 + hd_) * NB + faixa).ravel()
+                A['hist'] += np.bincount(plano, minlength=A['hist'].size)
                 hh, kk = np.nonzero(no_lim)
                 if len(hh):
                     pde = np.where(E['cde'][kk] >= 0, P[hh, np.clip(E['cde'][kk], 0, None)], np.nan)
@@ -208,6 +444,9 @@ def main():
         print(f'  {MESES[m]}/{a.ano} ok - {time.time() - t0:.0f} s')
 
     n_horas = horas_mes.sum()
+    for tipo, E in elems.items():
+        acc[tipo]['hist'] = acc[tipo]['hist'].reshape(len(E['com_lim']), 24, NB)
+        E['pos_lim'] = {k: i for i, k in enumerate(E['com_lim'])}
     # --- CSV --------------------------------------------------------------------------
     linhas = []
     for tipo, E in elems.items():
@@ -308,6 +547,8 @@ def main():
                'Circuitos NÃO monitorados acima de 100% do limite — gargalos que o SDDP não limita',
                '% das horas do ano', COR_SOBRE, 'circuitos_sobrecarga_nao_monitorados.png',
                lambda l_: f'máx. {l_["carregamento_max_pct"]:.0f}% · limite {l_["limite_MW"]:,.0f} MW'.replace(',', '.'))
+
+    graficos_horarios(a, saida, estagios, n_cen, ref, elems, acc, linhas, NB, PASSO)
 
     print(f'Circuitos monitorados que chegaram ao limite: {len(mon_lim)}')
     print(f'Circuitos não monitorados com sobrecarga: '

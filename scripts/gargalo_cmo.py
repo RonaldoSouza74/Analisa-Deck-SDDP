@@ -141,6 +141,8 @@ def main():
     uf_barra = {b['nome']: b['uf'] for b in barras}
     col_cmg = {n: i for i, n in enumerate(cmg['nomes'])}
     ca_cols = np.array([col_cmg[n] for n in uf_barra if n in col_cmg])
+    cols_por_uf = {u: np.array([col_cmg[n] for n, uu in uf_barra.items() if uu == u and n in col_cmg])
+                   for u in ORDEM_UF}
     usinas = {}   # fonte -> lista de (nome, coluna no cmgbus, uf, tecnologia)
     ren = {u['nome_usina']: u for u in ler_tab(os.path.join(a.tabelas, 'usinas_renovaveis_uf.csv'))}
     lst = []
@@ -206,6 +208,8 @@ def main():
         Mi[np.nonzero(ok)[0], idx_uf[f_][ok]] = 1
         ind_uf[f_] = Mi
     garg_horario = []                                       # (estágio, cenário, horas x UF em MW)
+    exc_horario = []                                        # idem, vertimento por excesso no sistema
+    dif_horario = []                                        # idem, CMO do estado - CMO do SIN ($/MWh)
 
     t0 = time.time()
     for k, e in enumerate(estagios):
@@ -218,6 +222,12 @@ def main():
             hd = np.arange(nh) % 24
             vert_br = np.zeros(nh)
             garg_uf = np.zeros((nh, len(ufs)))
+            exc_uf = np.zeros((nh, len(ufs)))
+            dif_uf = np.full((nh, len(ufs)), np.nan)
+            for j_u, u in enumerate(ufs):
+                cu = cols_por_uf.get(u)
+                if cu is not None and len(cu):
+                    dif_uf[:, j_u] = np.median(P[:, cu], axis=1) - ref
             for f_, h in fontes.items():
                 if h is None:
                     continue
@@ -230,6 +240,7 @@ def main():
                 vs = V - vg
                 vert_br += V.sum(axis=1)
                 garg_uf += vg @ ind_uf[f_]
+                exc_uf += vs @ ind_uf[f_]
                 for causa, X in ((0, vg), (1, vs)):
                     acc_usina[f_][causa] += X.sum(axis=0)
                     tot_us = X.sum(axis=0)
@@ -259,23 +270,31 @@ def main():
                 ativ_lnk[:, m] += (np.abs(L) > 1e-9).sum(axis=0)
             horas_mes[m] += nh
             garg_horario.append((e, c, garg_uf))
+            exc_horario.append((e, c, exc_uf))
+            dif_horario.append((e, c, dif_uf))
             n_horas += nh
         print(f'  {MESES[m]}/{a.ano} ok - {time.time() - t0:.0f} s')
 
     # --- saídas: CSV ---------------------------------------------------------------
-    # vertimento por gargalo (renovável + hidro) por estado, hora a hora, no formato do SDDP
-    with open(os.path.join(saida, 'vertimento_gargalo_uf_horario.csv'), 'w', encoding='latin-1', newline='') as f:
-        w = csv.writer(f, lineterminator='\r\n')
-        n_col = 3 + len(ufs)
-        vazio = [''] * n_col
-        w.writerow((['Varies per block?       ', 2, 'Unit    ', 'MW     ', cmg['tipo_estagio'], cmg['mes_ini'],
-                     cmg['ano_ini']] + vazio)[:n_col])
-        w.writerow((['Varies per sequence?    ', 1] + vazio)[:n_col])
-        w.writerow((['# of agents             ', len(ufs)] + vazio)[:n_col])
-        w.writerow(['Mês', 'Cenários', 'Hora'] + [u.ljust(12) for u in ufs])
-        for e, c, G in garg_horario:
-            for hh in range(G.shape[0]):
-                w.writerow([e + 1, c + 1, hh + 1] + ['%.6g' % v for v in G[hh]])
+    # por estado, hora a hora, no formato do SDDP: vertimento por gargalo e por excesso (renovável +
+    # hidro, MW) e diferença entre o CMO mediano das barras do estado e o CMO do SIN ($/MWh)
+    def escrever_uf_horario(nome_arq, unidade, linhas_):
+        with open(os.path.join(saida, nome_arq), 'w', encoding='latin-1', newline='') as f:
+            w = csv.writer(f, lineterminator='\r\n')
+            n_col = 3 + len(ufs)
+            vazio = [''] * n_col
+            w.writerow((['Varies per block?       ', 2, 'Unit    ', unidade.ljust(7), cmg['tipo_estagio'],
+                         cmg['mes_ini'], cmg['ano_ini']] + vazio)[:n_col])
+            w.writerow((['Varies per sequence?    ', 1] + vazio)[:n_col])
+            w.writerow((['# of agents             ', len(ufs)] + vazio)[:n_col])
+            w.writerow(['Mês', 'Cenários', 'Hora'] + [u.ljust(12) for u in ufs])
+            for e, c, G in linhas_:
+                for hh in range(G.shape[0]):
+                    w.writerow([e + 1, c + 1, hh + 1] + ['' if v != v else '%.6g' % v for v in G[hh]])
+
+    escrever_uf_horario('vertimento_gargalo_uf_horario.csv', 'MW', garg_horario)
+    escrever_uf_horario('vertimento_excesso_uf_horario.csv', 'MW', exc_horario)
+    escrever_uf_horario('cmo_diferenca_uf_horario.csv', '$/MWh', dif_horario)
 
     nomes_f = {'ren': 'renovavel', 'hid': 'hidro_turbinavel'}
     with open(os.path.join(saida, 'vertimento_causa_uf_mensal.csv'), 'w', encoding='utf-8-sig', newline='') as f:

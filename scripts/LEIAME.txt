@@ -116,6 +116,19 @@ ETAPAS SEPARADAS (se quiser rodar só uma)
      circuitos_vertimento.png                   circuitos com mais vertimento coincidente
      circuitos_horas_no_limite.png              circuitos mais tempo no limite
      circuitos_sobrecarga_nao_monitorados.png   circuitos não monitorados em sobrecarga
+     horario_por_estado\horario_<UF>.png      por estado, hora do dia (1 a 24) no eixo x:
+                                                1) vertimento por gargalo x por excesso (falta
+                                                   de demanda); 2) injeção líquida do estado nas
+                                                   horas com gargalo, só com excesso e sem
+                                                   vertimento; 3) CMO do estado - CMO do SIN, com
+                                                   a linha da tolerância; 4) carregamento (% do
+                                                   limite) das principais linhas monitoradas do
+                                                   estado, mediana e 95%; 5) não monitoradas em
+                                                   sobrecarga; 6) mapa mês x hora do gargalo
+     injecao_x_vertimento_causa.png             vertimento por gargalo e por excesso x injeção
+                                                líquida, hora a hora, nos 6 estados com mais
+                                                vertimento
+   O painel de injeção usa o businj_uf_horario.csv da etapa 1 (resultados_uf).
    Opções: --carregamento 99 (% do limite), --tolerancia 1 ($/MWh), --top 30.
    Lê o cmgbus, o acline_flow e o transformer_flow (vários GB): leva alguns minutos.
 
