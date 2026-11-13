@@ -138,7 +138,11 @@ ETAPAS SEPARADAS (se quiser rodar só uma)
    sem vertimento): vertimento; injeção líquida do estado; CMO do estado, do SIN e dos 3
    estados vizinhos de maior capacidade de divisa; e, para as 4 linhas/trafos que mais limitam
    o estado, o fluxo real (mediana e faixa 5-95%) com o limite físico do deck (Rating/Rn
-   tracejado, emergência pontilhado). Tabela: relacao_por_hora.csv.
+   tracejado, emergência pontilhado). A 1ª linha do gráfico mostra o número de ocorrências
+   (dias x cenários) de cada hora em cada situação e o % do total daquela hora.
+   ocorrencias_estados.png: todos os estados, % das ocorrências de cada hora do dia com
+   vertimento por gargalo, só por excesso e sem vertimento.
+   Tabela: relacao_por_hora.csv (n_horas = número de ocorrências).
    Opção: --circuitos N (quantas linhas/trafos por estado; padrão 4).
 
 9. rodar_balanco.bat  -> balanco_uf.py

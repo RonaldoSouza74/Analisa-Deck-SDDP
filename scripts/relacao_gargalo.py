@@ -140,6 +140,7 @@ def main():
 
     horas = np.arange(1, 25)
     linhas_csv = []
+    ocorrencias = {}       # UF -> {situação: % das ocorrências de cada hora}
     for uf in ORDEM_UF:
         if uf not in garg[1]:
             continue
@@ -165,27 +166,38 @@ def main():
         circs = escolha.get(uf, [])
         F = {d['nome']: serie_circ(d) for d in circs}
 
-        n_lin = 3 + len(circs)
+        n_lin = 4 + len(circs)
+        cont_h = {s_: np.array([(sit[s_] & (hd == h)).sum() for h in range(24)]) for s_, _ in SITS}
+        tot_h = sum(cont_h.values())
+        ocorrencias[uf] = {s_: 100 * cont_h[s_] / np.maximum(tot_h, 1) for s_ in cont_h}
         fig, axs = plt.subplots(n_lin, 3, figsize=(19, 2.9 * n_lin + 1.4), sharex=True, sharey='row', squeeze=False)
         for j, (s_, rot_s) in enumerate(SITS):
             m = sit[s_]
             ph = 100 * m.mean()
-            # 1) vertimento
+            # 0) número de ocorrências (dias x cenários) de cada hora nesta situação
             ax = axs[0, j]
+            cor_oc = {'garg': COR_GARG, 'exc': COR_EXC, 'sem': COR_UF}[s_]
+            ax.bar(horas, cont_h[s_], color=cor_oc, width=0.75)
+            for h in range(24):
+                if cont_h[s_][h]:
+                    ax.text(h + 1, cont_h[s_][h], f'{100 * cont_h[s_][h] / max(tot_h[h], 1):.0f}%', ha='center',
+                            va='bottom', fontsize=6, color=TEXTO2)
+            ax.set_title(f'{rot_s}\n({ph:.1f}% das horas do ano)'.replace('.', ','), loc='left', fontsize=10,
+                         fontweight='bold')
+            # 1) vertimento
+            ax = axs[1, j]
             mg = np.array([g[m & (hd == h)].mean() if (m & (hd == h)).any() else np.nan for h in range(24)])
             mx = np.array([x[m & (hd == h)].mean() if (m & (hd == h)).any() else np.nan for h in range(24)])
             ax.bar(horas, np.nan_to_num(mg), color=COR_GARG, width=0.75, label='vertimento por gargalo')
             ax.bar(horas, np.nan_to_num(mx), bottom=np.nan_to_num(mg), color=COR_EXC, width=0.75,
                    label='vertimento por excesso')
-            ax.set_title(f'{rot_s}\n({ph:.1f}% das horas do ano)'.replace('.', ','), loc='left', fontsize=10,
-                         fontweight='bold')
             # 2) injeção
-            ax = axs[1, j]
+            ax = axs[2, j]
             if inj_v is not None:
                 faixa(ax, horas, inj_v, hd, m, COR_INJ, 'injeção líquida do estado')
             ax.axhline(0, color=TEXTO2, linewidth=0.8)
             # 3) CMO
-            ax = axs[2, j]
+            ax = axs[3, j]
             if cmo_sin is not None:
                 faixa(ax, horas, cmo_sin, hd, m, COR_SIN, 'SIN (mediana das barras)', largura=1.6, banda=False,
                       estilo='--')
@@ -195,7 +207,7 @@ def main():
                 faixa(ax, horas, cmo_uf, hd, m, COR_UF, f'{uf} (mediana das barras)', largura=2.2)
             # 4) circuitos
             for i, d in enumerate(circs):
-                ax = axs[3 + i, j]
+                ax = axs[4 + i, j]
                 v = F[d['nome']]
                 faixa(ax, horas, v, hd, m, COR_UF, 'fluxo real (mediana; faixa 5-95%)')
                 for y, est in ((d['limite'], '--'), (-d['limite'], '--')):
@@ -214,18 +226,21 @@ def main():
                     ax.set_title(f'{d["nome"][:40]} ({d["ude"]}-{d["upa"]}) · limite {d["limite"]:,.0f} MW · '
                                  f'{sentido}'.replace(',', '.'), loc='left', fontsize=8.5)
         # rótulos e legendas
-        axs[0, 0].set_ylabel('MW')
+        axs[0, 0].set_ylabel('ocorrências')
+        axs[1, 0].set_title('Vertimento médio nessas horas (MW) — vermelho: gargalo · cinza: excesso nas mesmas horas',
+                            loc='left', fontsize=8.5)
         axs[1, 0].set_ylabel('MW')
-        axs[2, 0].set_ylabel('$/MWh')
-        axs[1, 0].set_title('Injeção líquida do estado (MW, positivo = exporta) — mediana e faixa 5-95%',
+        axs[2, 0].set_ylabel('MW')
+        axs[3, 0].set_ylabel('$/MWh')
+        axs[2, 0].set_title('Injeção líquida do estado (MW, positivo = exporta) — mediana e faixa 5-95%',
                             loc='left', fontsize=8.5)
-        axs[2, 0].set_title('CMO ($/MWh) — estado, SIN e vizinhos (medianas); faixa = 5-95% do estado',
+        axs[3, 0].set_title('CMO ($/MWh) — estado, SIN e vizinhos (medianas); faixa = 5-95% do estado',
                             loc='left', fontsize=8.5)
-        axs[0, 2].legend(loc='upper right', fontsize=7.5, frameon=False)
-        axs[2, 2].legend(loc='upper right', fontsize=7.5, frameon=False)
+        axs[1, 2].legend(loc='upper right', fontsize=7.5, frameon=False)
+        axs[3, 2].legend(loc='upper right', fontsize=7.5, frameon=False)
         if circs:
             from matplotlib.lines import Line2D
-            axs[3, 2].legend(handles=[Line2D([], [], color=COR_UF, linewidth=2, label='fluxo real (mediana; faixa 5-95%)'),
+            axs[4, 2].legend(handles=[Line2D([], [], color=COR_UF, linewidth=2, label='fluxo real (mediana; faixa 5-95%)'),
                                       Line2D([], [], color=TEXTO, linewidth=1.2, linestyle='--',
                                              label='limite físico normal (Rating/Rn)'),
                                       Line2D([], [], color=TEXTO2, linewidth=1, linestyle=':',
@@ -272,6 +287,45 @@ def main():
                     lin[f'circ{k + 1}_pct_horas_no_limite'] = round(100 * float((np.abs(v) >= 0.99 * d['limite']).mean()), 1)
                 linhas_csv.append(lin)
         print(f'  {uf} ok')
+
+    # visão geral: % das ocorrências de cada hora em cada situação, todos os estados
+    if ocorrencias:
+        ufs_o = [u for u in ORDEM_UF if u in ocorrencias]
+        ncol = 4
+        nlin = int(np.ceil(len(ufs_o) / ncol))
+        fig, axs = plt.subplots(nlin, ncol, figsize=(16, 2.6 * nlin + 1.2), sharex=True, sharey=True, squeeze=False)
+        for k, uf in enumerate(ufs_o):
+            ax = axs.ravel()[k]
+            base = np.zeros(24)
+            for s_, cor in (('garg', COR_GARG), ('exc', COR_EXC), ('sem', '#c9dcf3')):
+                v = ocorrencias[uf][s_]
+                ax.bar(horas, v, bottom=base, color=cor, width=0.85, edgecolor=FUNDO, linewidth=0.5)
+                base += v
+            pg = ocorrencias[uf]['garg'].mean()
+            ax.set_title(f'{uf} · gargalo em {pg:.1f}% das horas'.replace('.', ','), loc='left', fontsize=9.5,
+                         fontweight='bold')
+            ax.set_ylim(0, 100)
+            ax.set_xticks(horas, [str(h) if h % 4 == 1 else '' for h in horas], fontsize=7)
+            ax.grid(axis='y', color=GRADE, linewidth=0.6)
+            ax.set_axisbelow(True)
+        for ax in axs.ravel()[len(ufs_o):]:
+            ax.axis('off')
+        for ax in axs[:, 0]:
+            ax.set_ylabel('% das ocorrências')
+        from matplotlib.patches import Patch
+        fig.legend(handles=[Patch(color=COR_GARG, label='com vertimento por gargalo'),
+                            Patch(color=COR_EXC, label='só com vertimento por excesso (falta de demanda)'),
+                            Patch(color='#c9dcf3', label='sem vertimento')],
+                   loc='upper right', ncol=3, fontsize=9, frameon=False, bbox_to_anchor=(0.995, 0.995))
+        fig.suptitle(f'Em que situação cada hora do dia ocorreu, por estado, {a.ano}', x=0.01, ha='left', fontsize=13,
+                     fontweight='bold')
+        dias = sum(ref['horas'][e + 1] - ref['horas'][e] for e in estagios) // 24
+        fig.text(0.01, 0.004, f'Para cada hora do dia, as ocorrências são os {dias} dias × {n_cen} cenários; a barra mostra '
+                 'quanto % delas caiu em cada situação. Números absolutos em relacao_por_hora.csv (coluna n_horas).',
+                 fontsize=8, color=TEXTO2)
+        fig.tight_layout(rect=(0, 0.015, 1, 1 - 0.6 / fig.get_figheight()))
+        fig.savefig(os.path.join(saida, 'ocorrencias_estados.png'), dpi=120)
+        plt.close(fig)
 
     if linhas_csv:
         campos = []
