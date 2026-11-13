@@ -1,0 +1,176 @@
+PACOTE AGREGACAO_UF - análise por estado das saídas do SDDP
+===========================================================
+
+O QUE PRECISA
+-------------
+- Python 3 (python.org, marcando "Add python.exe to PATH" na instalação, ou Anaconda).
+- Pacotes numpy e matplotlib. No Prompt de Comando, uma vez só:
+      python -m pip install numpy matplotlib
+- A pasta do caso SDDP com:
+      * as saídas em .hdr + .bin: gergnd, vergnd, businj (ou bus_inj) e, se houver, bus_losses;
+      * os arquivos de entrada do deck: hrload??.dat, dcirc.dat, mcirc.dat, circstatus_b004m.dat,
+        dtrans.dat, mtrans.dat, transtatus_b004m.dat, ddcline.dat, mdcline.dat, dcnvlcc.dat,
+        mcnvlcc.dat, dclinestatus_b004m.dat, csumcirc.dat, sumcircub_b004m.dat.
+
+Os .bat e .py devem ficar todos nesta mesma pasta, junto com as tabelas
+barras_uf.csv, usinas_renovaveis_uf.csv e limites_uf.csv.
+
+
+JEITO MAIS SIMPLES: RODAR TUDO DE UMA VEZ
+-----------------------------------------
+Dê dois cliques em  rodar_tudo.bat  e responda:
+  1. Pasta do caso SDDP (ex.: C:\Estudo Curtailment SDDP\estudo_perdas_2025)
+  2. Estágios para os gráficos por estado (ex.: 2 13 = jan a dez de 2030; Enter = todos)
+  3. Ano (Enter = 2030)
+
+Ele roda as 9 etapas abaixo, em ordem, e grava tudo em  <pasta do caso>\resultados_uf.
+Tudo o que aparece na janela fica gravado em  <pasta do caso>\resultados_uf\log_rodar_tudo.txt
+(cada rodada é acrescentada no fim do arquivo, com data e hora). Envie esse arquivo em caso de dúvida.
+Leva alguns minutos (a etapa 1 lê os .bin de vários GB).
+
+
+ETAPAS SEPARADAS (se quiser rodar só uma)
+-----------------------------------------
+1. rodar_agregacao.bat  -> agrega_saidas_uf.py
+   Lê os .hdr/.bin do SDDP e soma por estado. Gera em <caso>\resultados_uf:
+     <var>_uf_horario.csv     mês x cenário x hora, uma coluna por estado (formato do SDDP)
+     <var>_uf_mensal.csv      mês x estado (x tecnologia), por cenário e média
+     <var>_agente_mensal.csv  cada usina/barra x mês, média dos cenários
+     checagem.txt             perfil da solar no 1º dia (tem que ser zero à noite)
+
+2. rodar_limites.bat  -> limites_uf.py
+   Soma a capacidade dos circuitos que cruzam a divisa de cada estado (linhas CA,
+   transformadores e elos CC em operação no ano). Gera limites_uf.csv,
+   limites_pares_uf.csv, circuitos_fronteira_uf.csv e restricoes_intercambio.csv.
+   Atenção: é a soma das capacidades de cada circuito, não a capacidade real de
+   transferência (o fluxo não se divide igualmente e há critérios de segurança).
+
+3. rodar_graficos.bat  -> graficos_uf.py
+   Gráficos em resultados_uf\graficos:
+     estado_<UF>.png                geração, vertimento e injeção por hora do dia (box plot),
+                                    com os limites de exportação/importação na injeção
+     boxplot_<var>_estados.png      os 27 estados num painel
+     mapa_calor_<var>_estados.png   média por mês x hora
+     injecao_x_vertimento.png       vertimento x injeção, hora a hora
+     ranking_estados.png            vertimento por estado (GWh e %)
+     vertimento_tecnologia.png e vertimento_uf_usina_x_barra.png
+                                    (precisam do vergnd_agente_mensal.csv na pasta)
+
+4. rodar_analise_semana.bat  -> analise_semana_carga.py
+   Fim de semana = os 2 dias de menor carga do SIN (hrload) em cada semana do mês.
+   Gráficos em resultados_uf\analise_semana:
+     horario\horario_<UF>.png       perfil horário médio de cada mês, dia útil x fim de
+                                    semana (vertimento em box plot, carga no eixo da direita)
+     diario\<var>\diario_<var>_<UF>.png  cada dia do ano, mês a mês (box plot dos cenários),
+                                    carga diária no eixo da direita
+     resumo_util_fds.png, correlacoes.png, carga_liquida_x_vertimento.png
+     dias.csv, semanas.csv, diario_valores.csv, resumo_util_fds.csv, correlacoes.csv
+
+5. rodar_margem.bat  -> margem_barras.py
+   Para cada barra: capacidade = soma dos limites dos circuitos MONITORADOS ligados a ela
+   (+ conversores CA->CC). SEM margem = a injeção do SDDP (businj) passa da capacidade em
+   pelo menos 1 hora de 1 cenário do ano. Barras sem circuito monitorado ou com circuito
+   monitorado de limite 99999 = "sem limite no deck" (contam como COM margem).
+   Saídas em resultados_uf\margem_barras:
+     barras_margem.csv            cada barra: capacidade, injeção máx./média, horas acima, grupo
+     margem_limites_uf.csv        por estado: nº de barras e capacidade de cada grupo
+     businj_<grupo>_uf_horario.csv  injeção agregada por estado de cada grupo (formato SDDP)
+     margem_<UF>.png              barras sem margem (injeção x capacidade agregadas) e
+                                  barras com margem, por hora do dia
+     margem_resumo.png            resumo por estado
+   Lê o businj.bin inteiro duas vezes: leva alguns minutos.
+
+6. rodar_gargalo.bat  -> gargalo_cmo.py
+   Separa o vertimento em GARGALO DE TRANSMISSÃO x EXCESSO NO SISTEMA (baixa demanda):
+   em cada hora e cenário, se o custo marginal (cmgbus) da barra da usina está mais de
+   1 $/MWh abaixo da mediana do custo marginal das barras do SIN, a usina está atrás de
+   um limite de rede (gargalo); senão, o vertimento é por sobra de energia no sistema.
+   Precisa na pasta do caso: cmgbus, vergnd (e, se houver, envetu = vertimento turbinável
+   das hidrelétricas, cmgsuc = restrições de intercâmbio, cmglnk = elos CC) em .hdr/.bin,
+   e chidro??.dat / hydrounit??.dat do deck.
+   Saídas em resultados_uf\gargalo_cmo:
+     gargalo_<UF>.png, gargalo_BR.png   vertimento por causa, por mês e por hora do dia,
+                                        e diferença de custo marginal nas horas com vertimento
+     gargalo_resumo.png                 vertimento por causa e estado
+     restricoes_ativas.png / .csv       % das horas com cada restrição de intercâmbio/elo CC
+                                        no limite, por mês
+     vertimento_causa_uf_mensal.csv, vertimento_causa_uf_tecnologia.csv,
+     vertimento_causa_usina.csv         os números por estado, tecnologia e usina
+   Opção: --tolerancia X (diferença mínima de custo marginal, em $/MWh; padrão 1).
+
+7. rodar_gargalo_linhas.bat  -> gargalo_cmo.py + gargalo_linhas.py + relacao_gargalo.py
+   (no rodar_tudo: etapas 6, 7 e 8)
+   Roda a etapa 6 (custo marginal) e depois aponta QUAIS LINHAS E TRANSFORMADORES ficam
+   no limite, pelos fluxos do SDDP (acline_flow e transformer_flow) e pelos limites da
+   rede do deck no ano:
+     - circuito monitorado com fluxo >= 99% do limite = NO LIMITE; o lado "preso" é a
+       barra de custo marginal mais baixo; soma o vertimento por gargalo do estado do lado
+       preso nas horas em que o circuito estava no limite (coincidência, não divisão
+       exclusiva, pois vários circuitos podem estar no limite na mesma hora);
+     - circuito NÃO monitorado acima de 100% = SOBRECARGA que o SDDP não limita (gargalo
+       que a simulação não representa).
+   Saídas em resultados_uf\gargalo_linhas:
+     circuitos_no_limite.csv                    cada circuito: % das horas no limite (ano e
+                                                por mês), separando preços, sobrecarga,
+                                                carregamento máximo, lado preso, vertimento
+     gargalos_por_uf.csv                        por estado: circuitos no limite e % das horas
+                                                com vertimento por gargalo em que havia circuito
+                                                do estado no limite
+     circuitos_vertimento.png                   circuitos com mais vertimento coincidente
+     circuitos_horas_no_limite.png              circuitos mais tempo no limite
+     circuitos_sobrecarga_nao_monitorados.png   circuitos não monitorados em sobrecarga
+     horario_por_estado\horario_<UF>.png      por estado, hora do dia (1 a 24) no eixo x:
+                                                1) vertimento por gargalo x por excesso (falta
+                                                   de demanda); 2) injeção líquida do estado nas
+                                                   horas com gargalo, só com excesso e sem
+                                                   vertimento; 3) CMO do estado - CMO do SIN, com
+                                                   a linha da tolerância; 4) carregamento (% do
+                                                   limite) das principais linhas monitoradas do
+                                                   estado, mediana e 95%; 5) não monitoradas em
+                                                   sobrecarga; 6) mapa mês x hora do gargalo
+     injecao_x_vertimento_causa.png             vertimento por gargalo e por excesso x injeção
+                                                líquida, hora a hora, nos 6 estados com mais
+                                                vertimento
+   O painel de injeção usa o businj_uf_horario.csv da etapa 1 (resultados_uf).
+   Opções: --carregamento 99 (% do limite), --tolerancia 1 ($/MWh), --top 30.
+   Lê o cmgbus, o acline_flow e o transformer_flow (vários GB): leva alguns minutos.
+
+   relacao_gargalo.py (etapa 8) gera em resultados_uf\relacao_gargalo, por estado, um gráfico
+   com a hora do dia no eixo x e 3 colunas (horas com vertimento por gargalo | só por excesso |
+   sem vertimento): vertimento; injeção líquida do estado; CMO do estado, do SIN e dos 3
+   estados vizinhos de maior capacidade de divisa; e, para as 4 linhas/trafos que mais limitam
+   o estado, o fluxo real (mediana e faixa 5-95%) com o limite físico do deck (Rating/Rn
+   tracejado, emergência pontilhado). A 1ª linha do gráfico mostra o número de ocorrências
+   (dias x cenários) de cada hora em cada situação e o % do total daquela hora.
+   ocorrencias_estados.png: todos os estados, % das ocorrências de cada hora do dia com
+   vertimento por gargalo, só por excesso e sem vertimento.
+   Tabela: relacao_por_hora.csv (n_horas = número de ocorrências).
+   Opção: --circuitos N (quantas linhas/trafos por estado; padrão 4).
+
+9. rodar_balanco.bat  -> balanco_uf.py
+   Balanço de cada estado, hora a hora: renovável gerada + hidrelétrica + termelétrica - carga
+   = injeção líquida ("outros" = baterias, déficit e diferenças), junto com o vertimento por
+   gargalo e por excesso. Mostra o que estava gerando no estado quando houve corte.
+   Precisa na pasta do caso: gerhid, gerter e demxba (.hdr/.bin); chidro??, ctermi??,
+   hydrounit?? e thermunit??.dat do deck; e os resultados das etapas 1 e 6 em resultados_uf.
+   Saídas em resultados_uf\balanco_uf:
+     balanco_<UF>.png          média por hora do dia: geração por fonte empilhada (abaixo da linha
+                               preta da carga = consumido no estado; contorno roxo = exportado;
+                               hachurado no topo = vertido); o mesmo separado em horas com gargalo, só com
+                               excesso e sem vertimento; térmica, hidro e outros por situação
+     balanco_resumo.png        vertimento x geração hidro e térmica do estado nas mesmas horas
+     balanco_situacao_uf.csv   médias (MW) e energia (GWh) de cada parcela por estado e situação
+
+barras_uf.py (sem .bat) refaz as tabelas barras_uf.csv / usinas_renovaveis_uf.csv a partir
+do deck, se a rede mudar:  python barras_uf.py "<pasta do caso>" "<pasta de saída>"
+
+
+SE DER ERRO
+-----------
+- "numpy/matplotlib não está instalado": rode  python -m pip install numpy matplotlib
+- "'python' não é reconhecido": reinstale o Python marcando "Add python.exe to PATH",
+  ou rode os .bat pelo Anaconda Prompt.
+- "o .bin tem X bytes, mas o .hdr indica Y": o .bin está incompleto ou é de outra rodada.
+- Qualquer outro: copie as mensagens da janela preta e envie para análise.
+
+Todos os CSV usam vírgula como separador e ponto decimal (como os CSV do SDDP).
