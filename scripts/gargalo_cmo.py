@@ -210,6 +210,7 @@ def main():
     garg_horario = []                                       # (estágio, cenário, horas x UF em MW)
     exc_horario = []                                        # idem, vertimento por excesso no sistema
     dif_horario = []                                        # idem, CMO do estado - CMO do SIN ($/MWh)
+    cmo_horario = []                                        # CMO mediano de cada estado e do SIN ($/MWh)
 
     t0 = time.time()
     for k, e in enumerate(estagios):
@@ -228,6 +229,7 @@ def main():
                 cu = cols_por_uf.get(u)
                 if cu is not None and len(cu):
                     dif_uf[:, j_u] = np.median(P[:, cu], axis=1) - ref
+            cmo_horario.append((e, c, np.column_stack([dif_uf + ref[:, None], ref])))
             for f_, h in fontes.items():
                 if h is None:
                     continue
@@ -295,6 +297,10 @@ def main():
     escrever_uf_horario('vertimento_gargalo_uf_horario.csv', 'MW', garg_horario)
     escrever_uf_horario('vertimento_excesso_uf_horario.csv', 'MW', exc_horario)
     escrever_uf_horario('cmo_diferenca_uf_horario.csv', '$/MWh', dif_horario)
+    ufs_sin = ufs + ['SIN']
+    ufs, ufs_orig = ufs_sin, ufs
+    escrever_uf_horario('cmo_uf_horario.csv', '$/MWh', cmo_horario)   # colunas: estados + SIN (mediana do país)
+    ufs = ufs_orig
 
     nomes_f = {'ren': 'renovavel', 'hid': 'hidro_turbinavel'}
     with open(os.path.join(saida, 'vertimento_causa_uf_mensal.csv'), 'w', encoding='utf-8-sig', newline='') as f:

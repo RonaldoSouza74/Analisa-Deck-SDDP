@@ -47,25 +47,30 @@ def circuitos_do_ano(caso, ano):
     data = datetime.date(ano, 1, 1)
     out = {}
 
-    def montar(tipo, base_arq, mod_arq, st_arq, i_lim_base, i_mon_base, i_lim_mod, i_exist, i_desat):
+    def montar(tipo, base_arq, mod_arq, st_arq, i_lim_base, i_mon_base, i_lim_mod, i_exist, i_desat,
+               i_emg_base=None, i_emg_mod=None):
         elem = {}
         for r in ler(os.path.join(caso, base_arq)):
             elem[int(r[0])] = dict(nome=r[1].strip(), de=int(r[2]), para=int(r[3]), exist=int(r[i_exist]),
                                    desat=int(r[i_desat]), limite=numero(r[i_lim_base]),
+                                   emergencia=numero(r[i_emg_base]) if i_emg_base is not None and len(r) > i_emg_base
+                                   else float('nan'),
                                    mon=int(r[i_mon_base]) if len(r) > i_mon_base and r[i_mon_base] else 0)
         for r in sorted(ler(os.path.join(caso, mod_arq)), key=lambda r: (int(r[2]), int(r[1]), int(r[0]))):
             if datetime.date(int(r[2]), int(r[1]), int(r[0])) > data:
                 continue
             e = elem.setdefault(int(r[3]), dict(nome=r[4].strip(), mon=0))
             e.update(de=int(r[5]), para=int(r[6]), exist=int(r[7]), desat=int(r[8]), limite=numero(r[i_lim_mod]))
+            if i_emg_mod is not None and len(r) > i_emg_mod:
+                e['emergencia'] = numero(r[i_emg_mod])
         st = situacao(os.path.join(caso, st_arq), data)
         for cod, e in elem.items():
             e['codigo'] = cod
             e['opera'] = e.get('exist', 1) == 0 and e.get('desat', 0) == 0 and em_operacao(st, cod)
             out[(tipo, e['nome'])] = e
 
-    montar('linha', 'dcirc.dat', 'mcirc.dat', 'circstatus_b004m.dat', 11, 14, 12, 6, 7)
-    montar('trafo', 'dtrans.dat', 'mtrans.dat', 'transtatus_b004m.dat', 14, 28, 14, 7, 8)
+    montar('linha', 'dcirc.dat', 'mcirc.dat', 'circstatus_b004m.dat', 11, 14, 12, 6, 7, 12, 13)   # Rating/EmergencyRating
+    montar('trafo', 'dtrans.dat', 'mtrans.dat', 'transtatus_b004m.dat', 14, 28, 14, 7, 8, 15, 15)  # Rn/Re
     return out
 
 

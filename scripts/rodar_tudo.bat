@@ -8,7 +8,8 @@ rem   4) gera a analise de dias uteis x fins de semana
 rem   5) identifica as barras com e sem margem de escoamento
 rem   6) separa o vertimento por gargalo de transmissao x excesso no sistema (custo marginal)
 rem   7) aponta as linhas e transformadores no limite (fluxos) e faz os graficos horarios por estado
-rem   8) balanco por estado nas horas de vertimento (renovavel + hidro + termica - carga)
+rem   8) relacao: vertimento x injecao x CMO x fluxo e limite fisico das linhas
+rem   9) balanco por estado nas horas de vertimento (renovavel + hidro + termica - carga)
 rem Deixe este arquivo na mesma pasta dos scripts .py e das tabelas .csv e de dois cliques nele.
 
 cd /d "%~dp0"
@@ -54,18 +55,18 @@ echo Ano: %ANO%
 
 if /i "%PULAR%"=="S" goto etapa2
 echo.
-echo ===== [1/8] Agregando as saidas do SDDP por estado =====
+echo ===== [1/9] Agregando as saidas do SDDP por estado =====
 python agrega_saidas_uf.py "%CASO%"
 if errorlevel 1 goto erro
 
 :etapa2
 echo.
-echo ===== [2/8] Limites de exportacao/importacao por estado =====
+echo ===== [2/9] Limites de exportacao/importacao por estado =====
 python limites_uf.py "%CASO%" "%~dp0." "%RES%" --ano %ANO%
 if errorlevel 1 goto erro
 
 echo.
-echo ===== [3/8] Graficos por estado =====
+echo ===== [3/9] Graficos por estado =====
 if not defined EST goto sem_estagios
 python graficos_uf.py "%RES%" --estagios %EST%
 goto depois_graficos
@@ -75,27 +76,32 @@ python graficos_uf.py "%RES%"
 if errorlevel 1 goto erro
 
 echo.
-echo ===== [4/8] Dias uteis x fins de semana =====
+echo ===== [4/9] Dias uteis x fins de semana =====
 python analise_semana_carga.py "%RES%" --caso "%CASO%" --ano %ANO%
 if errorlevel 1 goto erro
 
 echo.
-echo ===== [5/8] Margem de escoamento das barras =====
+echo ===== [5/9] Margem de escoamento das barras =====
 python margem_barras.py "%CASO%" --ano %ANO%
 if errorlevel 1 goto erro
 
 echo.
-echo ===== [6/8] Vertimento por gargalo x excesso no sistema (custo marginal) =====
+echo ===== [6/9] Vertimento por gargalo x excesso no sistema (custo marginal) =====
 python gargalo_cmo.py "%CASO%" --ano %ANO%
 if errorlevel 1 goto erro
 
 echo.
-echo ===== [7/8] Linhas e transformadores no limite (fluxos) e graficos horarios por estado =====
+echo ===== [7/9] Linhas e transformadores no limite (fluxos) e graficos horarios por estado =====
 python gargalo_linhas.py "%CASO%" --ano %ANO%
 if errorlevel 1 goto erro
 
 echo.
-echo ===== [8/8] Balanco por estado nas horas de vertimento =====
+echo ===== [8/9] Relacao: vertimento x injecao x CMO x fluxo e limite fisico das linhas =====
+python relacao_gargalo.py "%CASO%" --ano %ANO%
+if errorlevel 1 goto erro
+
+echo.
+echo ===== [9/9] Balanco por estado nas horas de vertimento =====
 python balanco_uf.py "%CASO%" --ano %ANO%
 if errorlevel 1 goto erro
 
@@ -106,6 +112,7 @@ echo   analise_semana\    dias uteis x fins de semana, correlacoes
 echo   margem_barras\     barras com e sem margem de escoamento
 echo   gargalo_cmo\       vertimento por gargalo de transmissao x excesso no sistema
 echo   gargalo_linhas\    linhas no limite e graficos horarios por estado
+echo   relacao_gargalo\   vertimento x injecao x CMO x linhas no limite, por situacao da hora
 echo   balanco_uf\        balanco por estado nas horas de vertimento
 echo   limites_uf.csv     capacidade de exportacao/importacao por estado
 echo.

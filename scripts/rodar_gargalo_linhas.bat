@@ -3,6 +3,7 @@ chcp 65001 > nul
 rem Gargalos de transmissao em duas etapas:
 rem   1) pelo custo marginal (gargalo_cmo.py): separa o vertimento em gargalo x excesso no sistema
 rem   2) pelos fluxos (gargalo_linhas.py): aponta quais linhas e transformadores ficam no limite
+rem   3) relacao (relacao_gargalo.py): vertimento x injecao x CMO x fluxo e limite fisico das linhas
 rem Deixe este arquivo na mesma pasta dos scripts .py e das tabelas .csv e de dois cliques nele.
 
 cd /d "%~dp0"
@@ -22,17 +23,22 @@ if not "%ANO%"=="" for /f "tokens=1 delims=-,; " %%a in ("%ANO%") do set ANO=%%a
 if "%ANO%"=="" set ANO=2030
 
 echo.
-echo ===== [1/2] Vertimento por gargalo x excesso no sistema (custo marginal) =====
+echo ===== [1/3] Vertimento por gargalo x excesso no sistema (custo marginal) =====
 python gargalo_cmo.py "%CASO%" --ano %ANO%
 if errorlevel 1 goto erro
 
 echo.
-echo ===== [2/2] Linhas e transformadores no limite (fluxos) =====
+echo ===== [2/3] Linhas e transformadores no limite (fluxos) =====
 python gargalo_linhas.py "%CASO%" --ano %ANO%
 if errorlevel 1 goto erro
 
 echo.
-echo Concluido. Resultados em: %CASO%\resultados_uf\gargalo_cmo e %CASO%\resultados_uf\gargalo_linhas
+echo ===== [3/3] Relacao: vertimento x injecao x CMO x fluxo e limite fisico das linhas =====
+python relacao_gargalo.py "%CASO%" --ano %ANO%
+if errorlevel 1 goto erro
+
+echo.
+echo Concluido. Resultados em %CASO%\resultados_uf: gargalo_cmo, gargalo_linhas e relacao_gargalo
 echo.
 pause
 exit /b 0
