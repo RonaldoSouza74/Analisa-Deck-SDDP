@@ -24,6 +24,8 @@ Dê dois cliques em  rodar_tudo.bat  e responda:
   3. Ano (Enter = 2030)
 
 Ele roda as 9 etapas abaixo, em ordem, e grava tudo em  <pasta do caso>\resultados_uf.
+Tudo o que aparece na janela fica gravado em  <pasta do caso>\resultados_uf\log_rodar_tudo.txt
+(cada rodada é acrescentada no fim do arquivo, com data e hora). Envie esse arquivo em caso de dúvida.
 Leva alguns minutos (a etapa 1 lê os .bin de vários GB).
 
 

@@ -20,6 +20,12 @@ set CASO=
 set /p CASO=Pasta do caso: 
 set CASO=%CASO:"=%
 set RES=%CASO%\resultados_uf
+if not exist "%RES%" mkdir "%RES%"
+set LOG=%RES%\log_rodar_tudo.txt
+>> "%LOG%" echo.
+>> "%LOG%" echo ================================================================
+>> "%LOG%" echo rodar_tudo.bat - %DATE% %TIME%
+>> "%LOG%" echo Pasta do caso: %CASO%
 
 echo.
 echo Estagios para os graficos por estado: digite so os DOIS numeros separados por espaco.
@@ -52,6 +58,7 @@ echo.
 echo Pasta do caso: %CASO%
 if defined EST (echo Estagios: %EST%) else (echo Estagios: todos)
 echo Ano: %ANO%
+>> "%LOG%" echo Estagios: %EST%  Ano: %ANO%  Pular etapa 1: %PULAR%
 
 if /i not "%PULAR%"=="S" goto etapa1
 rem so pula a etapa 1 se os resultados dela estiverem mesmo na pasta resultados_uf
@@ -63,58 +70,60 @@ echo   (vergnd_uf_horario.csv, gergnd_uf_horario.csv, businj_uf_horario.csv).
 echo   A etapa 1 sera feita agora.
 :etapa1
 echo.
-echo ===== [1/9] Agregando as saidas do SDDP por estado =====
-python agrega_saidas_uf.py "%CASO%"
+call :msg "===== [1/9] Agregando as saidas do SDDP por estado ====="
+python com_log.py "%LOG%" agrega_saidas_uf.py "%CASO%"
 if errorlevel 1 goto erro
 
 :etapa2
 echo.
-echo ===== [2/9] Limites de exportacao/importacao por estado =====
-python limites_uf.py "%CASO%" "%~dp0." "%RES%" --ano %ANO%
+call :msg "===== [2/9] Limites de exportacao/importacao por estado ====="
+python com_log.py "%LOG%" limites_uf.py "%CASO%" "%~dp0." "%RES%" --ano %ANO%
 if errorlevel 1 goto erro
 
 echo.
-echo ===== [3/9] Graficos por estado =====
+call :msg "===== [3/9] Graficos por estado ====="
 if not defined EST goto sem_estagios
-python graficos_uf.py "%RES%" --estagios %EST%
+python com_log.py "%LOG%" graficos_uf.py "%RES%" --estagios %EST%
 goto depois_graficos
 :sem_estagios
-python graficos_uf.py "%RES%"
+python com_log.py "%LOG%" graficos_uf.py "%RES%"
 :depois_graficos
 if errorlevel 1 goto erro
 
 echo.
-echo ===== [4/9] Dias uteis x fins de semana =====
-python analise_semana_carga.py "%RES%" --caso "%CASO%" --ano %ANO%
+call :msg "===== [4/9] Dias uteis x fins de semana ====="
+python com_log.py "%LOG%" analise_semana_carga.py "%RES%" --caso "%CASO%" --ano %ANO%
 if errorlevel 1 goto erro
 
 echo.
-echo ===== [5/9] Margem de escoamento das barras =====
-python margem_barras.py "%CASO%" --ano %ANO%
+call :msg "===== [5/9] Margem de escoamento das barras ====="
+python com_log.py "%LOG%" margem_barras.py "%CASO%" --ano %ANO%
 if errorlevel 1 goto erro
 
 echo.
-echo ===== [6/9] Vertimento por gargalo x excesso no sistema (custo marginal) =====
-python gargalo_cmo.py "%CASO%" --ano %ANO%
+call :msg "===== [6/9] Vertimento por gargalo x excesso no sistema (custo marginal) ====="
+python com_log.py "%LOG%" gargalo_cmo.py "%CASO%" --ano %ANO%
 if errorlevel 1 goto erro
 
 echo.
-echo ===== [7/9] Linhas e transformadores no limite (fluxos) e graficos horarios por estado =====
-python gargalo_linhas.py "%CASO%" --ano %ANO%
+call :msg "===== [7/9] Linhas e transformadores no limite (fluxos) e graficos horarios por estado ====="
+python com_log.py "%LOG%" gargalo_linhas.py "%CASO%" --ano %ANO%
 if errorlevel 1 goto erro
 
 echo.
-echo ===== [8/9] Relacao: vertimento x injecao x CMO x fluxo e limite fisico das linhas =====
-python relacao_gargalo.py "%CASO%" --ano %ANO%
+call :msg "===== [8/9] Relacao: vertimento x injecao x CMO x fluxo e limite fisico das linhas ====="
+python com_log.py "%LOG%" relacao_gargalo.py "%CASO%" --ano %ANO%
 if errorlevel 1 goto erro
 
 echo.
-echo ===== [9/9] Balanco por estado nas horas de vertimento =====
-python balanco_uf.py "%CASO%" --ano %ANO%
+call :msg "===== [9/9] Balanco por estado nas horas de vertimento ====="
+python com_log.py "%LOG%" balanco_uf.py "%CASO%" --ano %ANO%
 if errorlevel 1 goto erro
 
+>> "%LOG%" echo Concluido. Resultados em: %RES%
 echo.
 echo Concluido. Resultados em: %RES%
+echo   log_rodar_tudo.txt tudo o que apareceu nesta janela (para enviar em caso de duvida)
 echo   graficos\          graficos por estado, mapas de calor, ranking
 echo   analise_semana\    dias uteis x fins de semana, correlacoes
 echo   margem_barras\     barras com e sem margem de escoamento
@@ -128,8 +137,18 @@ pause
 exit /b 0
 
 :erro
+>> "%LOG%" echo ERRO - o processo parou nesta etapa.
 echo.
-echo Algo deu errado. Copie as mensagens acima e envie para analise.
+echo Algo deu errado. As mensagens acima estao gravadas em:
+echo   %LOG%
+echo Envie esse arquivo para analise.
 echo.
 pause
 exit /b 1
+
+:msg
+echo.
+echo %~1
+>> "%LOG%" echo.
+>> "%LOG%" echo %~1
+exit /b 0
