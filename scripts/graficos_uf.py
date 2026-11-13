@@ -531,7 +531,9 @@ def main():
                 d = {k: (x[m] if isinstance(x, np.ndarray) else x) for k, x in d.items()}
             dados[v] = d
     if not dados:
-        sys.exit(f'ERRO: nenhum *_uf_horario.csv encontrado em {a.pasta}')
+        sys.exit(f'ERRO: nenhum *_uf_horario.csv (vergnd, gergnd, businj) encontrado em {a.pasta}.\n'
+                 f'Esses arquivos são gerados pela etapa 1 (agrega_saidas_uf.py / rodar_agregacao.bat). Rode a '
+                 f'etapa 1 para este caso, ou no rodar_tudo.bat não responda S para pular a etapa 1.')
 
     for v, d in dados.items():
         print('Gráfico com todos os estados:', painel_estados(v, d, saida))

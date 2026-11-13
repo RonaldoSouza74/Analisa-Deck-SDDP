@@ -53,7 +53,15 @@ echo Pasta do caso: %CASO%
 if defined EST (echo Estagios: %EST%) else (echo Estagios: todos)
 echo Ano: %ANO%
 
-if /i "%PULAR%"=="S" goto etapa2
+if /i not "%PULAR%"=="S" goto etapa1
+rem so pula a etapa 1 se os resultados dela estiverem mesmo na pasta resultados_uf
+if exist "%RES%\vergnd_uf_horario.csv" goto etapa2
+echo.
+echo AVISO: voce pediu para pular a etapa 1, mas nao achei os resultados dela em
+echo   %RES%
+echo   (vergnd_uf_horario.csv, gergnd_uf_horario.csv, businj_uf_horario.csv).
+echo   A etapa 1 sera feita agora.
+:etapa1
 echo.
 echo ===== [1/9] Agregando as saidas do SDDP por estado =====
 python agrega_saidas_uf.py "%CASO%"
