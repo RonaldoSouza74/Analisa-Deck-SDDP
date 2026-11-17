@@ -405,10 +405,11 @@ def main():
         from matplotlib.patches import Patch
         fig.legend(handles=[Patch(color=COR_GARG, label='gargalo de transmissão'),
                             Patch(color=COR_SIST, label='excesso no sistema (baixa demanda)')],
-                   loc='upper right', ncol=2, fontsize=9, frameon=False, bbox_to_anchor=(0.995, 0.985))
+                   loc='upper left', ncol=2, fontsize=9, frameon=False,
+                   bbox_to_anchor=(0.005, 1 - 0.42 / fig.get_figheight()))
         fig.text(0.01, 0.004, f'Gargalo = CMO da barra da usina mais de {tol:g} $/MWh abaixo da mediana do CMO das '
                  f'barras do SIN na mesma hora e cenário. Média de {n_cen} cenários.', fontsize=7.5, color=TEXTO2)
-        fig.tight_layout(rect=(0, 0.015, 1, 0.955))
+        fig.tight_layout(rect=(0, 0.015, 1, 1 - 0.75 / fig.get_figheight()))
         fig.savefig(os.path.join(saida, f'gargalo_{nome}.png'), dpi=120)
         plt.close(fig)
 
