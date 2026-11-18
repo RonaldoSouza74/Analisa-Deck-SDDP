@@ -4,8 +4,8 @@ PACOTE AGREGACAO_UF - análise por estado das saídas do SDDP
 O QUE PRECISA
 -------------
 - Python 3 (python.org, marcando "Add python.exe to PATH" na instalação, ou Anaconda).
-- Pacotes numpy e matplotlib. No Prompt de Comando, uma vez só:
-      python -m pip install numpy matplotlib
+- Pacotes numpy e matplotlib (e python-pptx para a apresentação). No Prompt de Comando, uma vez só:
+      python -m pip install numpy matplotlib python-pptx
 - A pasta do caso SDDP com:
       * as saídas em .hdr + .bin: gergnd, vergnd, businj (ou bus_inj) e, se houver, bus_losses;
       * os arquivos de entrada do deck: hrload??.dat, dcirc.dat, mcirc.dat, circstatus_b004m.dat,
@@ -13,7 +13,7 @@ O QUE PRECISA
         mcnvlcc.dat, dclinestatus_b004m.dat, csumcirc.dat, sumcircub_b004m.dat.
 
 Os .bat e .py devem ficar todos nesta mesma pasta, junto com as tabelas
-barras_uf.csv, usinas_renovaveis_uf.csv e limites_uf.csv.
+barras_uf.csv, usinas_renovaveis_uf.csv e limites_uf.csv e o mapa_uf.json.
 
 
 JEITO MAIS SIMPLES: RODAR TUDO DE UMA VEZ
@@ -231,6 +231,24 @@ ETAPAS SEPARADAS (se quiser rodar só uma)
      vertimento_excesso_subsistema_horario.csv, cmo_subsistema_horario.csv   (formato do SDDP)
    Opções: --tolerancia 1 ($/MWh), --carregamento 99 (% do limite).
    Lê o cmgbus e o vergnd inteiros de novo: leva alguns minutos.
+
+APRESENTAÇÃO: rodar_apresentacao.bat  -> apresentacao.py
+   Rode depois do rodar_tudo.bat. Monta o PowerPoint
+     resultados_uf\apresentacao\apresentacao_vertimento_<ano>.pptx
+   com os gráficos das etapas, na ordem: mensagem principal (números), método, quanto e onde
+   (mapa do Brasil), quando, por quê (gargalo x excesso), subsistemas, linhas no limite, os 5
+   estados com mais vertimento, conclusões, limitações e anexo (demais estados e subsistemas).
+   - Os títulos com números são calculados dos CSVs (nada digitado à mão). Revise as frases
+     de conclusão no PowerPoint.
+   - Gera também mapa_vertimento_uf.png (mapa do Brasil: GWh vertidos e % por gargalo, por
+     estado) e tecnologia_uf.png, só com o ano e sem a geração distribuída.
+   - Gráficos altos (por estado e por subsistema) são divididos em 2 ou 3 slides, para ficarem
+     legíveis. Cada slide traz no rodapé o arquivo de origem.
+   - Slides cujo gráfico não existe são pulados (a lista aparece na janela).
+   - O contorno dos estados vem do arquivo mapa_uf.json (malha do IBGE), que deve ficar nesta
+     pasta; ele serve só para desenhar o mapa.
+   - Na primeira vez o .bat instala o pacote python-pptx (python -m pip install python-pptx).
+   - Feche a apresentação no PowerPoint antes de rodar de novo.
 
 barras_uf.py (sem .bat) refaz as tabelas barras_uf.csv / usinas_renovaveis_uf.csv a partir
 do deck, se a rede mudar:  python barras_uf.py "<pasta do caso>" "<pasta de saída>"

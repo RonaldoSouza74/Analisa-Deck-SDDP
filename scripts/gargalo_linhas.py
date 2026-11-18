@@ -176,8 +176,8 @@ def figura_estado(uf, linhas_perfil, top_m, top_n, pasta, a, NB, PASSO, horas):
         ax.legend(**LEG)
     linhas_cmo(axs[2], col('cmo_estado'), f'{uf} (mediana de todas\nas barras do estado)', col('cmo_sin'),
                'SIN (mediana de todas\nas barras do país)', '')
-    axs[2].set_title(f'CMO médio por hora ($/MWh) — todas as horas do ano: {uf}, SIN e os estados vizinhos de maior '
-                     'capacidade de divisa', loc='left', fontsize=10)
+    axs[2].set_title(f'CMO médio por hora ($/MWh) — todas as horas do ano: {uf}, SIN e os 3 estados com maior '
+                     f'capacidade de divisa com {uf}', loc='left', fontsize=10)
     # 4 e 5) CMO nas barras das usinas no momento em que verteram x SIN e vizinhos nos mesmos momentos
     for ax, f_, rot in ((axs[3], 'ren', 'renováveis'), (axs[4], 'hid', 'hidrelétricas')):
         cu, cs = col(f'cmo_usinas_{f_}_que_verteram'), col(f'cmo_sin_quando_{f_}_verteu')
