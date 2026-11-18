@@ -106,6 +106,69 @@ def ler_tab(caminho):
         return list(csv.DictReader(f, delimiter=sep))
 
 
+def mapear_usinas(a, fontes, cmg):
+    """Barra de cada usina com vertimento (vergnd sem a GD; envetu) e colunas do cmgbus.
+    Devolve dict com barras, cod_para_nome, uf_barra, col_cmg, ca_cols, cols_por_uf, usinas
+    (fonte -> lista de (nome, coluna no cmgbus, uf, tecnologia)), cols_fonte (colunas do .bin usadas)
+    e nome_barra (fonte -> nome da barra de cada usina, ou None)."""
+    barras = [b for b in ler_tab(os.path.join(a.tabelas, 'barras_uf.csv')) if b['rede'] == 'CA']
+    cod_para_nome = {int(b['codigo']): b['nome'] for b in barras}
+    uf_barra = {b['nome']: b['uf'] for b in barras}
+    col_cmg = {n: i for i, n in enumerate(cmg['nomes'])}
+    ca_cols = np.array([col_cmg[n] for n in uf_barra if n in col_cmg])
+    cols_por_uf = {u: np.array([col_cmg[n] for n, uu in uf_barra.items() if uu == u and n in col_cmg])
+                   for u in ORDEM_UF}
+    usinas = {}   # fonte -> lista de (nome, coluna no cmgbus, uf, tecnologia)
+    ren = {u['nome_usina']: u for u in ler_tab(os.path.join(a.tabelas, 'usinas_renovaveis_uf.csv'))}
+    lst, barra_ren = [], []
+    for n in fontes['ren']['nomes']:
+        u = ren.get(n)
+        nb = cod_para_nome.get(int(u['barra'])) if u else None
+        lst.append((n, col_cmg.get(nb, -1), u['uf_barra'] if u else '??', u['tecnologia'] if u else '??'))
+        barra_ren.append(nb)
+    # a geração distribuída (MMGD = GD solar, OMGD = outras GD) fica fora da conta de gargalo x excesso:
+    # na operação real ela está atrás do medidor e não é cortada (no deck ela só tem custo de corte 11 $/MWh)
+    eh_gd = [x[3] in ('GD Solar', 'Outras GD') or x[0].strip().upper().startswith(('MMGD', 'OMGD')) for x in lst]
+    cols_fonte = {'ren': np.array([i for i, g in enumerate(eh_gd) if not g], dtype=int)}
+    usinas['ren'] = [x for x, g in zip(lst, eh_gd) if not g]
+    nome_barra = {'ren': [b_ for b_, g in zip(barra_ren, eh_gd) if not g]}
+    print(f'  {sum(eh_gd)} usinas de geração distribuída (MMGD/OMGD) fora da conta de gargalo x excesso')
+    if fontes['hid'] is not None:
+        conex = os.path.join(a.tabelas, 'conexoes_usinas_uf.csv')
+        hid = collections.defaultdict(list)
+        if os.path.exists(conex):
+            for r in ler_tab(conex):
+                if r['tipo_usina'] == 'H':
+                    hid[r['nome_usina']].append(r)
+        else:
+            print('  AVISO: conexoes_usinas_uf.csv não encontrado; hidrelétricas sem barra')
+        por_unidade = hidro_por_unidades(a.caso)
+        uf_cod = {int(b['codigo']): b['uf'] for b in barras}
+        lst, barra_hid = [], []
+        for n in fontes['hid']['nomes']:
+            cods = [int(r['barra']) for r in hid.get(n, [])] or por_unidade.get(n, [])
+            cods = [c_ for c_ in cods if c_ in cod_para_nome]
+            if cods:
+                uf = collections.Counter(uf_cod[c_] for c_ in cods).most_common(1)[0][0]
+                nb = cod_para_nome[collections.Counter(cods).most_common(1)[0][0]]
+                lst.append((n, col_cmg.get(nb, -1), uf, 'Hidrelétrica'))
+                barra_hid.append(nb)
+            else:
+                lst.append((n, -1, '??', 'Hidrelétrica'))
+                barra_hid.append(None)
+        usinas['hid'] = lst
+        nome_barra['hid'] = barra_hid
+    for f_, lst in usinas.items():
+        sem = sum(1 for x in lst if x[1] < 0)
+        if sem:
+            sem_n = [x[0] for x in lst if x[1] < 0]
+            print(f'  AVISO: {sem} usinas de {fontes[f_]["nome"]} sem barra na rede (contam como excesso no sistema): '
+                  f'{", ".join(sem_n[:12])}{" ..." if sem > 12 else ""}')
+
+    return dict(barras=barras, cod_para_nome=cod_para_nome, uf_barra=uf_barra, col_cmg=col_cmg, ca_cols=ca_cols,
+                cols_por_uf=cols_por_uf, usinas=usinas, cols_fonte=cols_fonte, nome_barra=nome_barra)
+
+
 # ----------------------------------------------------------------------------
 def main():
     p = argparse.ArgumentParser(description='Vertimento por gargalo x excesso no sistema (custo marginal).')
@@ -137,54 +200,8 @@ def main():
           f'tolerância {tol} $/MWh')
 
     # --- tabelas: barra de cada usina -------------------------------------------
-    barras = [b for b in ler_tab(os.path.join(a.tabelas, 'barras_uf.csv')) if b['rede'] == 'CA']
-    cod_para_nome = {int(b['codigo']): b['nome'] for b in barras}
-    uf_barra = {b['nome']: b['uf'] for b in barras}
-    col_cmg = {n: i for i, n in enumerate(cmg['nomes'])}
-    ca_cols = np.array([col_cmg[n] for n in uf_barra if n in col_cmg])
-    cols_por_uf = {u: np.array([col_cmg[n] for n, uu in uf_barra.items() if uu == u and n in col_cmg])
-                   for u in ORDEM_UF}
-    usinas = {}   # fonte -> lista de (nome, coluna no cmgbus, uf, tecnologia)
-    ren = {u['nome_usina']: u for u in ler_tab(os.path.join(a.tabelas, 'usinas_renovaveis_uf.csv'))}
-    lst = []
-    for n in fontes['ren']['nomes']:
-        u = ren.get(n)
-        nb = cod_para_nome.get(int(u['barra'])) if u else None
-        lst.append((n, col_cmg.get(nb, -1), u['uf_barra'] if u else '??', u['tecnologia'] if u else '??'))
-    # a geração distribuída (MMGD = GD solar, OMGD = outras GD) fica fora da conta de gargalo x excesso:
-    # na operação real ela está atrás do medidor e não é cortada (no deck ela só tem custo de corte 11 $/MWh)
-    eh_gd = [x[3] in ('GD Solar', 'Outras GD') or x[0].strip().upper().startswith(('MMGD', 'OMGD')) for x in lst]
-    cols_fonte = {'ren': np.array([i for i, g in enumerate(eh_gd) if not g], dtype=int)}
-    usinas['ren'] = [x for x, g in zip(lst, eh_gd) if not g]
-    print(f'  {sum(eh_gd)} usinas de geração distribuída (MMGD/OMGD) fora da conta de gargalo x excesso')
-    if fontes['hid'] is not None:
-        conex = os.path.join(a.tabelas, 'conexoes_usinas_uf.csv')
-        hid = collections.defaultdict(list)
-        if os.path.exists(conex):
-            for r in ler_tab(conex):
-                if r['tipo_usina'] == 'H':
-                    hid[r['nome_usina']].append(r)
-        else:
-            print('  AVISO: conexoes_usinas_uf.csv não encontrado; hidrelétricas sem barra')
-        por_unidade = hidro_por_unidades(a.caso)
-        uf_cod = {int(b['codigo']): b['uf'] for b in barras}
-        lst = []
-        for n in fontes['hid']['nomes']:
-            cods = [int(r['barra']) for r in hid.get(n, [])] or por_unidade.get(n, [])
-            cods = [c_ for c_ in cods if c_ in cod_para_nome]
-            if cods:
-                uf = collections.Counter(uf_cod[c_] for c_ in cods).most_common(1)[0][0]
-                nb = cod_para_nome[collections.Counter(cods).most_common(1)[0][0]]
-                lst.append((n, col_cmg.get(nb, -1), uf, 'Hidrelétrica'))
-            else:
-                lst.append((n, -1, '??', 'Hidrelétrica'))
-        usinas['hid'] = lst
-    for f_, lst in usinas.items():
-        sem = sum(1 for x in lst if x[1] < 0)
-        if sem:
-            sem_n = [x[0] for x in lst if x[1] < 0]
-            print(f'  AVISO: {sem} usinas de {fontes[f_]["nome"]} sem barra na rede (contam como excesso no sistema): '
-                  f'{", ".join(sem_n[:12])}{" ..." if sem > 12 else ""}')
+    M = mapear_usinas(a, fontes, cmg)
+    ca_cols, cols_por_uf, usinas, cols_fonte = M['ca_cols'], M['cols_por_uf'], M['usinas'], M['cols_fonte']
 
     # --- acumuladores -------------------------------------------------------------
     ufs = ORDEM_UF

@@ -10,6 +10,7 @@ rem   6) separa o vertimento por gargalo de transmissao x excesso no sistema (cu
 rem   7) aponta as linhas e transformadores no limite (fluxos) e faz os graficos horarios por estado
 rem   8) relacao: vertimento x injecao x CMO x fluxo e limite fisico das linhas
 rem   9) balanco por estado nas horas de vertimento (renovavel + hidro + termica - carga)
+rem  10) vertimento por gargalo entre subsistemas x excesso (CMO dos 14 subsistemas e intercambio)
 rem Deixe este arquivo na mesma pasta dos scripts .py e das tabelas .csv e de dois cliques nele.
 
 cd /d "%~dp0"
@@ -70,18 +71,18 @@ echo   (vergnd_uf_horario.csv, gergnd_uf_horario.csv, businj_uf_horario.csv).
 echo   A etapa 1 sera feita agora.
 :etapa1
 echo.
-call :msg "===== [1/9] Agregando as saidas do SDDP por estado ====="
+call :msg "===== [1/10] Agregando as saidas do SDDP por estado ====="
 python com_log.py "%LOG%" agrega_saidas_uf.py "%CASO%"
 if errorlevel 1 goto erro
 
 :etapa2
 echo.
-call :msg "===== [2/9] Limites de exportacao/importacao por estado ====="
+call :msg "===== [2/10] Limites de exportacao/importacao por estado ====="
 python com_log.py "%LOG%" limites_uf.py "%CASO%" "%~dp0." "%RES%" --ano %ANO%
 if errorlevel 1 goto erro
 
 echo.
-call :msg "===== [3/9] Graficos por estado ====="
+call :msg "===== [3/10] Graficos por estado ====="
 if not defined EST goto sem_estagios
 python com_log.py "%LOG%" graficos_uf.py "%RES%" --estagios %EST%
 goto depois_graficos
@@ -91,33 +92,38 @@ python com_log.py "%LOG%" graficos_uf.py "%RES%"
 if errorlevel 1 goto erro
 
 echo.
-call :msg "===== [4/9] Dias uteis x fins de semana ====="
+call :msg "===== [4/10] Dias uteis x fins de semana ====="
 python com_log.py "%LOG%" analise_semana_carga.py "%RES%" --caso "%CASO%" --ano %ANO%
 if errorlevel 1 goto erro
 
 echo.
-call :msg "===== [5/9] Margem de escoamento das barras ====="
+call :msg "===== [5/10] Margem de escoamento das barras ====="
 python com_log.py "%LOG%" margem_barras.py "%CASO%" --ano %ANO%
 if errorlevel 1 goto erro
 
 echo.
-call :msg "===== [6/9] Vertimento por gargalo x excesso no sistema (custo marginal) ====="
+call :msg "===== [6/10] Vertimento por gargalo x excesso no sistema (custo marginal) ====="
 python com_log.py "%LOG%" gargalo_cmo.py "%CASO%" --ano %ANO%
 if errorlevel 1 goto erro
 
 echo.
-call :msg "===== [7/9] Linhas e transformadores no limite (fluxos) e graficos horarios por estado ====="
+call :msg "===== [7/10] Linhas e transformadores no limite (fluxos) e graficos horarios por estado ====="
 python com_log.py "%LOG%" gargalo_linhas.py "%CASO%" --ano %ANO%
 if errorlevel 1 goto erro
 
 echo.
-call :msg "===== [8/9] Relacao: vertimento x injecao x CMO x fluxo e limite fisico das linhas ====="
+call :msg "===== [8/10] Relacao: vertimento x injecao x CMO x fluxo e limite fisico das linhas ====="
 python com_log.py "%LOG%" relacao_gargalo.py "%CASO%" --ano %ANO%
 if errorlevel 1 goto erro
 
 echo.
-call :msg "===== [9/9] Balanco por estado nas horas de vertimento ====="
+call :msg "===== [9/10] Balanco por estado nas horas de vertimento ====="
 python com_log.py "%LOG%" balanco_uf.py "%CASO%" --ano %ANO%
+if errorlevel 1 goto erro
+
+echo.
+call :msg "===== [10/10] Vertimento por gargalo entre subsistemas x excesso (CMO dos subsistemas) ====="
+python com_log.py "%LOG%" gargalo_subsistema.py "%CASO%" --ano %ANO%
 if errorlevel 1 goto erro
 
 >> "%LOG%" echo Concluido. Resultados em: %RES%
@@ -131,6 +137,7 @@ echo   gargalo_cmo\       vertimento por gargalo de transmissao x excesso no sis
 echo   gargalo_linhas\    linhas no limite e graficos horarios por estado
 echo   relacao_gargalo\   vertimento x injecao x CMO x linhas no limite, por situacao da hora
 echo   balanco_uf\        balanco por estado nas horas de vertimento
+echo   gargalo_subsistema\ vertimento por gargalo entre subsistemas x excesso, intercambios
 echo   limites_uf.csv     capacidade de exportacao/importacao por estado
 echo.
 pause

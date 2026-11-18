@@ -23,7 +23,7 @@ Dê dois cliques em  rodar_tudo.bat  e responda:
   2. Estágios para os gráficos por estado (ex.: 2 13 = jan a dez de 2030; Enter = todos)
   3. Ano (Enter = 2030)
 
-Ele roda as 9 etapas abaixo, em ordem, e grava tudo em  <pasta do caso>\resultados_uf.
+Ele roda as 10 etapas abaixo, em ordem, e grava tudo em  <pasta do caso>\resultados_uf.
 Tudo o que aparece na janela fica gravado em  <pasta do caso>\resultados_uf\log_rodar_tudo.txt
 (cada rodada é acrescentada no fim do arquivo, com data e hora). Envie esse arquivo em caso de dúvida.
 Leva alguns minutos (a etapa 1 lê os .bin de vários GB).
@@ -184,6 +184,45 @@ ETAPAS SEPARADAS (se quiser rodar só uma)
                                excesso e sem vertimento; térmica, hidro e outros por situação
      balanco_resumo.png        vertimento x geração hidro e térmica do estado nas mesmas horas
      balanco_situacao_uf.csv   médias (MW) e energia (GWh) de cada parcela por estado e situação
+
+10. rodar_gargalo_subsistema.bat  -> gargalo_subsistema.py
+   Mesma ideia da etapa 6, mas por SUBSISTEMA (os 14 do sistem.dat: SE, SU, NE, NO, IT, AR, MA,
+   BM, TP, PA, TA, IV, IM, XI). CMO do subsistema = mediana do CMO de todas as barras CA do
+   subsistema; CMO do SIN = mediana de todas as barras do país. Cada usina pertence ao
+   subsistema da sua barra, e o vertimento (renovável sem GD e turbinável das hidrelétricas)
+   fica em 3 tipos:
+     - GARGALO ENTRE SUBSISTEMAS: CMO do subsistema mais de 1 $/MWh abaixo do SIN (o
+       subsistema inteiro está preso: a energia não sai pelas ligações com os outros);
+     - GARGALO DENTRO DO SUBSISTEMA: subsistema no preço do SIN, mas a barra da usina mais de
+       1 $/MWh abaixo do subsistema (gargalo na rede interna);
+     - EXCESSO NO SISTEMA: nenhum dos dois.
+   A comparação subsistema x SIN é "entre subsistemas" x (dentro + excesso).
+   Intercâmbio: na rodada com rede elétrica o SDDP não usa os limites do interc.dat (eles são
+   do modelo sem rede); o intercâmbio é o fluxo nos circuitos que cruzam a fronteira entre
+   subsistemas, que a saída interc.bin traz circuito a circuito. O script soma esses fluxos por
+   par de subsistemas e compara com os limites físicos dos circuitos (Rating/Rn; elos CC pelos
+   conversores). A capacidade do interc.dat aparece só como referência.
+   Precisa na pasta do caso: cmgbus, vergnd e, se houver, envetu, interc e cmgdem (.hdr/.bin);
+   sistem.dat, interc.dat, dcirc/mcirc, dtrans/mtrans, ddcline, dcnvlcc/mcnvlcc, dseriescap.
+   Saídas em resultados_uf\gargalo_subsistema:
+     resumo_subsistemas.png                vertimento no ano por subsistema e tipo
+     mensal_subsistemas.png                o mesmo mês a mês, um painel por subsistema
+     por_subsistema\subsistema_<ID>.png    hora do dia (1 a 24) no eixo x: vertimento renovável e
+                                           hidrelétrico por tipo; CMO do subsistema, do SIN, dos
+                                           3 subsistemas vizinhos e o cmgdem do SDDP; CMO no
+                                           momento em que verteu; intercâmbio com os vizinhos
+     intercambios_subsistemas.png          por ligação: % das horas com CMO separado e com
+                                           circuito monitorado de fronteira no limite, e o
+                                           vertimento por gargalo coincidente
+     vertimento_causa_subsistema_mensal.csv  GWh por subsistema, fonte, mês e tipo
+     intercambios_subsistemas.csv          cada ligação: circuitos, limites, fluxo médio, % das
+                                           horas no limite e com CMO separado, por mês
+     perfil_horario_subsistema.csv         por subsistema e hora do dia: vertimento por tipo, CMOs,
+                                           vizinhos e intercâmbio
+     vertimento_gargalo_entre_subsistemas_horario.csv, vertimento_gargalo_dentro_subsistema_horario.csv,
+     vertimento_excesso_subsistema_horario.csv, cmo_subsistema_horario.csv   (formato do SDDP)
+   Opções: --tolerancia 1 ($/MWh), --carregamento 99 (% do limite).
+   Lê o cmgbus e o vergnd inteiros de novo: leva alguns minutos.
 
 barras_uf.py (sem .bat) refaz as tabelas barras_uf.csv / usinas_renovaveis_uf.csv a partir
 do deck, se a rede mudar:  python barras_uf.py "<pasta do caso>" "<pasta de saída>"
