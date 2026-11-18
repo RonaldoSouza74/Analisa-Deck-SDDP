@@ -54,7 +54,8 @@ ETAPAS SEPARADAS (se quiser rodar só uma)
      injecao_x_vertimento.png       vertimento x injeção, hora a hora
      ranking_estados.png            vertimento por estado (GWh e %)
      vertimento_tecnologia.png e vertimento_uf_usina_x_barra.png
-                                    (precisam do vergnd_agente_mensal.csv na pasta)
+                                    (precisam do vergnd_agente_mensal.csv na pasta); o de
+                                    tecnologia é sem a geração distribuída (MMGD/OMGD)
 
 4. rodar_analise_semana.bat  -> analise_semana_carga.py
    Fim de semana = os 2 dias de menor carga do SIN (hrload) em cada semana do mês.

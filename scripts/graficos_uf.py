@@ -14,8 +14,8 @@ Gera, na pasta de saída:
   mapa_calor_<var>_estados.png média por mês (linhas) e hora do dia (colunas)
   injecao_x_vertimento.png     vertimento x injeção líquida, hora a hora, por
                                estado (precisa de businj e vergnd)
-  vertimento_tecnologia.png    vertimento por estado e tecnologia (precisa de
-                               vergnd_agente_mensal.csv)
+  vertimento_tecnologia.png    vertimento por estado e tecnologia, sem a geração
+                               distribuída MMGD/OMGD (precisa de vergnd_agente_mensal.csv)
   vertimento_uf_usina_x_barra.png  vertimento pela UF da barra de conexão x UF
                                do nome da usina (precisa de vergnd_agente_mensal.csv
                                e usinas_renovaveis_uf.csv)
@@ -397,6 +397,10 @@ def vertimento_tecnologia(pasta, saida):
     fator = 1 / 1000 if col.startswith('total_MWh') else 1  # MWh -> GWh
     soma = {}
     for u in usinas:
+        # sem a geração distribuída (MMGD = GD solar, OMGD = outras GD): na operação real ela não é cortada
+        nome_us = str(next(iter(u.values()), '')).strip().upper()
+        if u.get('tecnologia') in ('GD Solar', 'Outras GD') or nome_us.startswith(('MMGD', 'OMGD')):
+            continue
         soma.setdefault(u['uf'], {}).setdefault(u['tecnologia'], 0.0)
         soma[u['uf']][u['tecnologia']] += u['total'] * fator
     tot = {uf: sum(v.values()) for uf, v in soma.items()}
@@ -423,7 +427,8 @@ def vertimento_tecnologia(pasta, saida):
             ax.set_xlim(0, 100)
             ax.set_title('Participação de cada tecnologia no vertimento do estado (%)', loc='left', fontsize=10)
     axs[0].legend(loc='lower right', fontsize=8, frameon=False)
-    fig.suptitle('Vertimento renovável por estado e tecnologia (UF da barra de conexão)', x=0.01, ha='left',
+    fig.suptitle('Vertimento renovável por estado e tecnologia, sem a geração distribuída (UF da barra de conexão)',
+                 x=0.01, ha='left',
                  fontsize=13, fontweight='bold')
     fig.tight_layout(rect=(0, 0, 1, 0.95))
     nome = os.path.join(saida, 'vertimento_tecnologia.png')
