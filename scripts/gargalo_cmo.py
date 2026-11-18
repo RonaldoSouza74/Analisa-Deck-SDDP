@@ -188,7 +188,6 @@ def main():
     acc_usina = {f_: np.zeros((2, len(usinas[f_]))) for f_ in usinas}
     tec_list = sorted({x[3] for f_ in usinas for x in usinas[f_]})
     acc_tec = {f_: np.zeros((2, len(ufs), len(tec_list))) for f_ in usinas}
-    dif_vert = collections.defaultdict(list)    # uf -> diferenças de CMO (amostra) nas horas com vertimento
     n_horas = 0
     ativ_suc = np.zeros((suc['n_agentes'] if suc else 0, 12))
     ativ_lnk = np.zeros((lnk['n_agentes'] if lnk else 0, 12))
@@ -211,6 +210,13 @@ def main():
     exc_horario = []                                        # idem, vertimento por excesso no sistema
     dif_horario = []                                        # idem, CMO do estado - CMO do SIN ($/MWh)
     cmo_horario = []                                        # CMO mediano de cada estado e do SIN ($/MWh)
+    # perfil por hora do dia: CMO do SIN e de cada estado (todas as horas) e CMO nas barras das usinas que
+    # verteram, ponderado pelo MW vertido, junto com o CMO do SIN nesses mesmos momentos
+    cmo_sin_h, cnt_h = np.zeros(24), np.zeros(24)
+    cmo_uf_h = np.zeros((len(ufs), 24))
+    wp = {f_: np.zeros((len(ufs), 24)) for f_ in usinas}    # soma de CMO da barra x MW vertido
+    wr = {f_: np.zeros((len(ufs), 24)) for f_ in usinas}    # soma de CMO do SIN x MW vertido
+    wv = {f_: np.zeros((len(ufs), 24)) for f_ in usinas}    # soma de MW vertido
 
     t0 = time.time()
     for k, e in enumerate(estagios):
@@ -230,6 +236,11 @@ def main():
                 if cu is not None and len(cu):
                     dif_uf[:, j_u] = np.median(P[:, cu], axis=1) - ref
             cmo_horario.append((e, c, np.column_stack([dif_uf + ref[:, None], ref])))
+            Hd = np.zeros((24, nh))
+            Hd[hd, np.arange(nh)] = 1                                # agrega horas -> hora do dia
+            cmo_sin_h += Hd @ ref
+            cnt_h += Hd.sum(axis=1)
+            cmo_uf_h += (Hd @ np.nan_to_num(dif_uf + ref[:, None])).T
             for f_, h in fontes.items():
                 if h is None:
                     continue
@@ -243,6 +254,9 @@ def main():
                 vert_br += V.sum(axis=1)
                 garg_uf += vg @ ind_uf[f_]
                 exc_uf += vs @ ind_uf[f_]
+                wp[f_] += (Hd @ ((Pp * V) @ ind_uf[f_])).T
+                wr[f_] += (Hd @ ((ref[:, None] * V) @ ind_uf[f_])).T
+                wv[f_] += (Hd @ (V @ ind_uf[f_])).T
                 for causa, X in ((0, vg), (1, vs)):
                     acc_usina[f_][causa] += X.sum(axis=0)
                     tot_us = X.sum(axis=0)
@@ -254,14 +268,6 @@ def main():
                     np.add.at(Xh, hd, X)
                     np.add.at(por_hora, idx_uf[f_][ok], Xh[:, ok].T)
                     acc_h[f_][causa] += por_hora
-                if f_ == 'ren':
-                    # amostra das diferenças de CMO onde há vertimento (para o box plot)
-                    hh, uu = np.nonzero(V > 1e-3)
-                    if len(hh):
-                        sel = rng.choice(len(hh), size=min(len(hh), 4000), replace=False)
-                        for i_h, i_u in zip(hh[sel], uu[sel]):
-                            if idx_uf[f_][i_u] >= 0:
-                                dif_vert[ufs[idx_uf[f_][i_u]]].append((hd[i_h], dif[i_h, i_u]))
             if suc is not None:
                 S = bloco(suc, e, c)
                 at = np.abs(S) > 1e-9
@@ -303,6 +309,33 @@ def main():
     ufs = ufs_orig
 
     nomes_f = {'ren': 'renovavel', 'hid': 'hidro_turbinavel'}
+    # perfil por hora do dia (média do ano e dos cenários), usado pelo gráfico por estado do gargalo_linhas
+    with open(os.path.join(saida, 'perfil_horario_uf.csv'), 'w', encoding='utf-8-sig', newline='') as f:
+        w = csv.writer(f)
+        cab = ['uf', 'hora']
+        for f_ in ('ren', 'hid'):
+            cab += [f'vert_{f_}_gargalo_MW', f'vert_{f_}_excesso_MW', f'cmo_usinas_{f_}_que_verteram',
+                    f'cmo_sin_quando_{f_}_verteu']
+        w.writerow(cab + ['cmo_estado', 'cmo_sin'])
+        n_dia = np.maximum(cnt_h, 1)                         # ocorrências de cada hora (dias x cenários)
+
+        def linha(rot, i_uf):
+            sel = (lambda X: X[i_uf]) if i_uf is not None else (lambda X: X.sum(axis=0))
+            for h in range(24):
+                lin = [rot, h + 1]
+                for f_ in ('ren', 'hid'):
+                    if f_ in acc_h:
+                        vv = sel(wv[f_])[h]
+                        lin += [round(sel(acc_h[f_][0])[h] / n_dia[h], 2), round(sel(acc_h[f_][1])[h] / n_dia[h], 2),
+                                round(sel(wp[f_])[h] / vv, 2) if vv > 1e-6 else '',
+                                round(sel(wr[f_])[h] / vv, 2) if vv > 1e-6 else '']
+                    else:
+                        lin += ['', '', '', '']
+                est = cmo_uf_h[i_uf, h] / n_dia[h] if i_uf is not None else cmo_sin_h[h] / n_dia[h]
+                w.writerow(lin + [round(est, 2), round(cmo_sin_h[h] / n_dia[h], 2)])
+        for i, u in enumerate(ufs):
+            linha(u, i)
+        linha('BR', None)
     with open(os.path.join(saida, 'vertimento_causa_uf_mensal.csv'), 'w', encoding='utf-8-sig', newline='') as f:
         w = csv.writer(f)
         w.writerow(['uf', 'fonte', 'mes', 'gargalo_GWh', 'excesso_sistema_GWh', 'pct_gargalo'])
@@ -348,69 +381,42 @@ def main():
     fontes_ok = [f_ for f_ in ('ren', 'hid') if f_ in acc_m]
 
     def fig_uf(nome, i_uf):
+        """Vertimento por causa mês a mês (renovável e hidro). O perfil por hora do dia fica no gráfico
+        estado_<UF>.png do gargalo_linhas.py."""
         sel = (lambda X: X[:, i_uf]) if i_uf is not None else (lambda X: X.sum(axis=1))
-        nlin = len(fontes_ok) * 2 + (1 if dif_vert else 0)
-        fig, axs = plt.subplots(nlin, 1, figsize=(11, 2.9 * nlin + 0.6))
-        axs = np.atleast_1d(axs)
-        k = 0
-        for f_ in fontes_ok:
+        fig, axs = plt.subplots(len(fontes_ok), 1, figsize=(11, 3.1 * len(fontes_ok) + 1.0), squeeze=False)
+        axs = axs[:, 0]
+        for ax, f_ in zip(axs, fontes_ok):
             rot = dict((x[0], x[2]) for x in FONTES)[f_]
             M = sel(acc_m[f_]) / n_cen / 1000                     # [causa, mês] GWh
-            ax = axs[k]
             x = np.arange(12)
-            ax.bar(x, M[0], color=COR_GARG, width=0.7, label='gargalo de transmissão', edgecolor=FUNDO, linewidth=1)
-            ax.bar(x, M[1], bottom=M[0], color=COR_SIST, width=0.7, label='excesso no sistema (baixa demanda)',
-                   edgecolor=FUNDO, linewidth=1)
+            ax.bar(x, M[0], color=COR_GARG, width=0.7, edgecolor=FUNDO, linewidth=1)
+            ax.bar(x, M[1], bottom=M[0], color=COR_SIST, width=0.7, edgecolor=FUNDO, linewidth=1)
             tot = M.sum()
             pct = 100 * M[0].sum() / tot if tot > 0 else 0
             ax.set_title(f'Vertimento {rot} por mês (GWh) — {tot:,.0f} GWh no ano, {pct:.0f}% por gargalo'
                          .replace(',', '.'), loc='left', fontsize=10)
+            if tot <= 0:
+                ax.set_ylim(0, 1)
+                ax.set_yticks([0])
+                ax.text(0.5, 0.5, f'sem vertimento {rot.split(" ")[0]} no estado', ha='center', va='center',
+                        color=TEXTO2, transform=ax.transAxes)
             ax.set_xticks(x, MESES)
             ax.set_ylabel('GWh')
-            k += 1
-            H = sel(acc_h[f_]) / (n_horas / 24)                    # MW médio por hora do dia
-            ax = axs[k]
-            hh = np.arange(1, 25)
-            ax.bar(hh, H[0], color=COR_GARG, width=0.75, edgecolor=FUNDO, linewidth=1)
-            ax.bar(hh, H[1], bottom=H[0], color=COR_SIST, width=0.75, edgecolor=FUNDO, linewidth=1)
-            ax.set_title(f'Vertimento {rot} médio por hora do dia (MW)', loc='left', fontsize=10)
-            ax.set_xticks(hh, [str(v) if v % 2 else '' for v in hh])
-            ax.set_ylabel('MW')
-            k += 1
-        if dif_vert:
-            ax = axs[k]
-            amostra = dif_vert.get(nome, []) if i_uf is not None else [v for l_ in dif_vert.values() for v in l_]
-            if amostra:
-                hs = np.array([x[0] for x in amostra])
-                ds = np.array([x[1] for x in amostra])
-                ax.boxplot([ds[hs == h] if (hs == h).any() else [np.nan] for h in range(24)], positions=range(1, 25),
-                           widths=0.6, whis=(5, 95), showfliers=False, patch_artist=True, manage_ticks=False,
-                           boxprops=dict(facecolor=COR_GARG + '44', edgecolor=COR_GARG),
-                           whiskerprops=dict(color=COR_GARG), capprops=dict(color=COR_GARG),
-                           medianprops=dict(color=TEXTO, linewidth=1.4))
-                ax.axhline(0, color=TEXTO2, linewidth=0.8)
-                ax.axhline(-tol, color=TEXTO, linewidth=1, linestyle='--')
-            ax.set_title('Diferença de CMO da barra da usina em relação ao SIN, nas horas com vertimento renovável '
-                         '($/MWh) — abaixo do tracejado = gargalo', loc='left', fontsize=9.5)
-            ax.set_xticks(range(1, 25), [str(v) if v % 2 else '' for v in range(1, 25)])
-            ax.set_xlim(0.3, 24.7)
-            ax.set_ylabel('$/MWh')
-        for ax in axs:
             ax.grid(axis='y', color=GRADE, linewidth=0.6)
             ax.set_axisbelow(True)
-        axs[-1].set_xlabel('Hora do dia (1 = 00h-01h)')
         titulo = 'Brasil' if i_uf is None else f'{nome} ({REGIAO_DA_UF.get(nome, "")})'
-        fig.suptitle(f'{titulo} — vertimento por gargalo de transmissão × excesso no sistema, {a.ano}', x=0.01,
-                     ha='left', fontsize=13, fontweight='bold')
+        fig.suptitle(f'{titulo} — vertimento por gargalo de transmissão × excesso no sistema, mês a mês, {a.ano}',
+                     x=0.01, ha='left', fontsize=13, fontweight='bold')
         from matplotlib.patches import Patch
         fig.legend(handles=[Patch(color=COR_GARG, label='gargalo de transmissão'),
-                            Patch(color=COR_SIST, label='excesso no sistema (baixa demanda)')],
+                            Patch(color=COR_SIST, label='excesso no sistema (falta de demanda)')],
                    loc='upper left', ncol=2, fontsize=9, frameon=False,
                    bbox_to_anchor=(0.005, 1 - 0.42 / fig.get_figheight()))
         fig.text(0.01, 0.004, f'Gargalo = CMO da barra da usina mais de {tol:g} $/MWh abaixo da mediana do CMO das '
                  f'barras do SIN na mesma hora e cenário. Média de {n_cen} cenários.', fontsize=7.5, color=TEXTO2)
-        fig.tight_layout(rect=(0, 0.015, 1, 1 - 0.75 / fig.get_figheight()))
-        fig.savefig(os.path.join(saida, f'gargalo_{nome}.png'), dpi=120)
+        fig.tight_layout(rect=(0, 0.02, 1, 1 - 0.6 / fig.get_figheight()))
+        fig.savefig(os.path.join(saida, f'gargalo_mensal_{nome}.png'), dpi=120)
         plt.close(fig)
 
     tot_uf = {u: sum(acc_m[f_][:, i].sum() for f_ in fontes_ok) for i, u in enumerate(ufs)}

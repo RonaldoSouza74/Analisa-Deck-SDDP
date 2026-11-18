@@ -89,8 +89,13 @@ ETAPAS SEPARADAS (se quiser rodar só uma)
    das hidrelétricas, cmgsuc = restrições de intercâmbio, cmglnk = elos CC) em .hdr/.bin,
    e chidro??.dat / hydrounit??.dat do deck.
    Saídas em resultados_uf\gargalo_cmo:
-     gargalo_<UF>.png, gargalo_BR.png   vertimento por causa, por mês e por hora do dia,
-                                        e diferença de custo marginal nas horas com vertimento
+     gargalo_mensal_<UF>.png, gargalo_mensal_BR.png
+                                        vertimento por causa (gargalo x excesso), mês a mês,
+                                        renovável e hidrelétrico (o perfil por hora do dia fica
+                                        no estado_<UF>.png da etapa 7)
+     perfil_horario_uf.csv              por estado e hora do dia (1 a 24): vertimento por causa
+                                        (MW médio), CMO do estado, CMO do SIN e o CMO das barras
+                                        das usinas que verteram (ponderado pelo MW vertido)
      gargalo_resumo.png                 vertimento por causa e estado
      restricoes_ativas.png / .csv       % das horas com cada restrição de intercâmbio/elo CC
                                         no limite, por mês
@@ -119,19 +124,28 @@ ETAPAS SEPARADAS (se quiser rodar só uma)
      circuitos_vertimento.png                   circuitos com mais vertimento coincidente
      circuitos_horas_no_limite.png              circuitos mais tempo no limite
      circuitos_sobrecarga_nao_monitorados.png   circuitos não monitorados em sobrecarga
-     horario_por_estado\horario_<UF>.png      por estado, hora do dia (1 a 24) no eixo x:
-                                                1) vertimento por gargalo x por excesso (falta
-                                                   de demanda); 2) injeção líquida do estado nas
-                                                   horas com gargalo, só com excesso e sem
-                                                   vertimento; 3) CMO do estado - CMO do SIN, com
-                                                   a linha da tolerância; 4) carregamento (% do
-                                                   limite) das principais linhas monitoradas do
-                                                   estado, mediana e 95%; 5) não monitoradas em
-                                                   sobrecarga; 6) mapa mês x hora do gargalo
+     por_estado\estado_<UF>.png             GRÁFICO PRINCIPAL DE CADA ESTADO. Todos os painéis
+                                                com a hora do dia (1 = 00h-01h) no eixo x, alinhados,
+                                                e médias de todos os dias e cenários do ano:
+                                                1) vertimento renovável por hora (MW): vermelho =
+                                                   gargalo, cinza = excesso no sistema;
+                                                2) o mesmo para o vertimento turbinável das hidrelétricas;
+                                                3) CMO do estado x CMO do SIN ($/MWh), todas as horas;
+                                                4) CMO nas barras das usinas no momento em que verteram
+                                                   (linha cheia, ponderado pelo MW vertido) x CMO do SIN
+                                                   nesses mesmos momentos (tracejada). Cheia abaixo da
+                                                   tracejada = gargalo (faixa rosa);
+                                                5) carregamento (% do limite físico do deck) das 4
+                                                   linhas/trafos monitorados que mais limitam o estado:
+                                                   mediana (cheia) e 95% (pontilhado), 100% tracejado;
+                                                6) circuitos não monitorados acima de 100%, se houver.
      injecao_x_vertimento_causa.png             vertimento por gargalo e por excesso x injeção
                                                 líquida, hora a hora, nos 6 estados com mais
                                                 vertimento
-   O painel de injeção usa o businj_uf_horario.csv da etapa 1 (resultados_uf).
+   Precisa do perfil_horario_uf.csv da etapa 6 (gargalo_cmo) e, para a dispersão, do
+   businj_uf_horario.csv da etapa 1 (resultados_uf).
+   Arquivos de versões anteriores (gargalo_cmo\gargalo_<UF>.png e a pasta
+   gargalo_linhas\horario_por_estado) não são mais gerados e podem ser apagados.
    Opções: --carregamento 99 (% do limite), --tolerancia 1 ($/MWh), --top 30.
    Lê o cmgbus, o acline_flow e o transformer_flow (vários GB): leva alguns minutos.
 
