@@ -143,7 +143,7 @@ def figura_estado(uf, linhas_perfil, top_m, top_n, pasta, a, NB, PASSO, horas):
     fig, axs = plt.subplots(n_pain, 1, figsize=(15, 2.5 * n_pain + 1.3), sharex=True)
     LEG = dict(loc='upper left', bbox_to_anchor=(1.01, 1.0), borderaxespad=0, frameon=False, fontsize=8)
     # 1 e 2) vertimento por causa
-    for ax, f_, rot in ((axs[0], 'ren', 'renovável'), (axs[1], 'hid', 'hidrelétrico (vertimento turbinável)')):
+    for ax, f_, rot in ((axs[0], 'ren', 'renovável (sem GD)'), (axs[1], 'hid', 'hidrelétrico (vertimento turbinável)')):
         gg, xx = np.nan_to_num(col(f'vert_{f_}_gargalo_MW')), np.nan_to_num(col(f'vert_{f_}_excesso_MW'))
         ax.bar(horas, gg, color=COR_LIM, width=0.75, edgecolor=FUNDO, linewidth=0.8)
         ax.bar(horas, xx, bottom=gg, color=COR_EXC, width=0.75, edgecolor=FUNDO, linewidth=0.8)
@@ -236,7 +236,8 @@ def figura_estado(uf, linhas_perfil, top_m, top_n, pasta, a, NB, PASSO, horas):
     fig.suptitle(f'{uf} ({REGIAO_DA_UF.get(uf, "")}) — vertimento, CMO e linhas por hora do dia, {a.ano}', x=0.01,
                  y=1 - 0.12 / fig.get_figheight(), ha='left', fontsize=13, fontweight='bold')
     fig.text(0.01, 0.004, 'Médias de todas as horas do ano e de todos os cenários, por hora do dia. Gargalo = CMO da barra '
-             f'da usina mais de {a.tolerancia:g} $/MWh abaixo do CMO do SIN na mesma hora e cenário.',
+             f'da usina mais de {a.tolerancia:g} $/MWh abaixo do CMO do SIN na mesma hora e cenário. Vertimento sem a geração '
+             'distribuída (MMGD/OMGD).',
              fontsize=7.5, color=TEXTO2)
     fig.subplots_adjust(left=0.055, right=0.78, top=1 - 0.95 / fig.get_figheight(), bottom=0.75 / fig.get_figheight(),
                         hspace=0.5)

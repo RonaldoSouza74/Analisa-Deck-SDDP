@@ -85,6 +85,10 @@ ETAPAS SEPARADAS (se quiser rodar só uma)
    em cada hora e cenário, se o custo marginal (cmgbus) da barra da usina está mais de
    1 $/MWh abaixo da mediana do custo marginal das barras do SIN, a usina está atrás de
    um limite de rede (gargalo); senão, o vertimento é por sobra de energia no sistema.
+   A geração distribuída (usinas MMGD = GD solar e OMGD = outras GD) fica FORA dessa conta,
+   e portanto fora de todos os gráficos e tabelas de gargalo x excesso (etapas 6 a 9): na
+   operação real ela não é cortada (no deck ela só tem custo de corte 11 $/MWh, contra 10
+   das usinas centralizadas, por isso o SDDP às vezes a corta).
    Precisa na pasta do caso: cmgbus, vergnd (e, se houver, envetu = vertimento turbinável
    das hidrelétricas, cmgsuc = restrições de intercâmbio, cmglnk = elos CC) em .hdr/.bin,
    e chidro??.dat / hydrounit??.dat do deck.

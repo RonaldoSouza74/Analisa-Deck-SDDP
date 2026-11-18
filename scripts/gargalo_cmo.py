@@ -13,7 +13,8 @@ Para cada hora, cenário e usina com vertimento:
                       no SIN como um todo, isto é, baixa demanda frente à oferta).
 
 Vertimento analisado:
-  - renovável: vergnd (por usina renovável);
+  - renovável: vergnd (por usina renovável), SEM a geração distribuída (usinas MMGD = GD solar e
+    OMGD = outras GD), que na operação real não é cortada;
   - hidrelétrico: envetu (energia vertida turbinável, por hidrelétrica), se existir.
 Também conta, por hora, as restrições de intercâmbio (cmgsuc) e os elos CC (cmglnk) no
 limite (custo marginal diferente de zero).
@@ -39,7 +40,7 @@ from agrega_saidas_uf import ler_hdr, mes_ano                                   
 from graficos_uf import ORDEM_UF, REGIAO_DA_UF, MESES, TEXTO, TEXTO2, GRADE, FUNDO, plt, np  # noqa: E402
 
 COR_GARG, COR_SIST = '#e34948', '#8a8984'
-FONTES = [('ren', 'vergnd', 'renovável'), ('hid', 'envetu', 'hidrelétrico (vertimento turbinável)')]
+FONTES = [('ren', 'vergnd', 'renovável (sem GD)'), ('hid', 'envetu', 'hidrelétrico (vertimento turbinável)')]
 
 
 # ----------------------------------------------------------------------------
@@ -150,7 +151,12 @@ def main():
         u = ren.get(n)
         nb = cod_para_nome.get(int(u['barra'])) if u else None
         lst.append((n, col_cmg.get(nb, -1), u['uf_barra'] if u else '??', u['tecnologia'] if u else '??'))
-    usinas['ren'] = lst
+    # a geração distribuída (MMGD = GD solar, OMGD = outras GD) fica fora da conta de gargalo x excesso:
+    # na operação real ela está atrás do medidor e não é cortada (no deck ela só tem custo de corte 11 $/MWh)
+    eh_gd = [x[3] in ('GD Solar', 'Outras GD') or x[0].strip().upper().startswith(('MMGD', 'OMGD')) for x in lst]
+    cols_fonte = {'ren': np.array([i for i, g in enumerate(eh_gd) if not g], dtype=int)}
+    usinas['ren'] = [x for x, g in zip(lst, eh_gd) if not g]
+    print(f'  {sum(eh_gd)} usinas de geração distribuída (MMGD/OMGD) fora da conta de gargalo x excesso')
     if fontes['hid'] is not None:
         conex = os.path.join(a.tabelas, 'conexoes_usinas_uf.csv')
         hid = collections.defaultdict(list)
@@ -246,7 +252,10 @@ def main():
             for f_, h in fontes.items():
                 if h is None:
                     continue
-                V = bloco(h, e, c) * 1000.0                          # MWh na hora (= MW)
+                V = bloco(h, e, c)
+                if f_ in cols_fonte:
+                    V = V[:, cols_fonte[f_]]                         # sem a geração distribuída
+                V = V * 1000.0                                       # MWh na hora (= MW)
                 cc = col[f_]
                 Pp = np.where(cc >= 0, P[:, np.clip(cc, 0, None)], ref[:, None])
                 dif = Pp - ref[:, None]
@@ -453,7 +462,8 @@ def main():
                    loc='upper left', ncol=2, fontsize=9, frameon=False,
                    bbox_to_anchor=(0.005, 1 - 0.42 / fig.get_figheight()))
         fig.text(0.01, 0.004, f'Gargalo = CMO da barra da usina mais de {tol:g} $/MWh abaixo da mediana do CMO das '
-                 f'barras do SIN na mesma hora e cenário. Média de {n_cen} cenários.', fontsize=7.5, color=TEXTO2)
+                 f'barras do SIN na mesma hora e cenário. Média de {n_cen} cenários. Sem a geração distribuída (MMGD/OMGD).',
+                 fontsize=7.5, color=TEXTO2)
         fig.tight_layout(rect=(0, 0.02, 1, 1 - 0.6 / fig.get_figheight()))
         fig.savefig(os.path.join(saida, f'gargalo_mensal_{nome}.png'), dpi=120)
         plt.close(fig)

@@ -259,7 +259,8 @@ def main():
                      x=0.01, ha='left', fontsize=13, fontweight='bold')
         fig.text(0.01, 0.006, f'Médias e caixas com todas as horas do ano e os {n_cen} cenários. "Outros" = injeção − '
                  f'(renovável + hidro + térmica − carga): baterias, déficit e diferenças (média {res_.mean():.0f} MW, '
-                 f'95% entre {np.percentile(res_, 2.5):.0f} e {np.percentile(res_, 97.5):.0f} MW).',
+                 f'95% entre {np.percentile(res_, 2.5):.0f} e {np.percentile(res_, 97.5):.0f} MW). Vertimento sem a geração '
+                 f'distribuída (MMGD/OMGD).',
                  fontsize=7.5, color=TEXTO2)
         fig.subplots_adjust(left=0.05, right=0.99, top=0.94, bottom=0.06)
         fig.savefig(os.path.join(saida, f'balanco_{uf}.png'), dpi=115)

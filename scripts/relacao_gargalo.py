@@ -257,7 +257,8 @@ def main():
                      f'da hora, {a.ano}', x=0.01, y=1 - 0.25 / fig.get_figheight(), ha='left', fontsize=13,
                      fontweight='bold')
         fig.text(0.01, 0.004, f'Todas as horas do ano e os {n_cen} cenários, separadas pela situação do estado em cada '
-                 'hora. Fluxos e limites físicos das linhas/trafos que mais limitam o estado (gargalo_linhas).',
+                 'hora. Fluxos e limites físicos das linhas/trafos que mais limitam o estado (gargalo_linhas). Vertimento sem '
+                 'a geração distribuída (MMGD/OMGD).',
                  fontsize=7.5, color=TEXTO2)
         fig.subplots_adjust(left=0.05, right=0.99, top=1 - 0.95 / fig.get_figheight(),
                             bottom=0.65 / fig.get_figheight(), hspace=0.45, wspace=0.06)
