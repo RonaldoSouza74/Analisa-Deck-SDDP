@@ -95,7 +95,9 @@ ETAPAS SEPARADAS (se quiser rodar só uma)
                                         no estado_<UF>.png da etapa 7)
      perfil_horario_uf.csv              por estado e hora do dia (1 a 24): vertimento por causa
                                         (MW médio), CMO do estado, CMO do SIN e o CMO das barras
-                                        das usinas que verteram (ponderado pelo MW vertido)
+                                        das usinas que verteram (ponderado pelo MW vertido) e o
+                                        CMO dos 3 estados vizinhos de maior capacidade de divisa
+                                        (precisa do limites_pares_uf.csv da etapa 2)
      gargalo_resumo.png                 vertimento por causa e estado
      restricoes_ativas.png / .csv       % das horas com cada restrição de intercâmbio/elo CC
                                         no limite, por mês
@@ -130,15 +132,18 @@ ETAPAS SEPARADAS (se quiser rodar só uma)
                                                 1) vertimento renovável por hora (MW): vermelho =
                                                    gargalo, cinza = excesso no sistema;
                                                 2) o mesmo para o vertimento turbinável das hidrelétricas;
-                                                3) CMO do estado x CMO do SIN ($/MWh), todas as horas;
-                                                4) CMO nas barras das usinas no momento em que verteram
-                                                   (linha cheia, ponderado pelo MW vertido) x CMO do SIN
-                                                   nesses mesmos momentos (tracejada). Cheia abaixo da
-                                                   tracejada = gargalo (faixa rosa);
-                                                5) carregamento (% do limite físico do deck) das 4
+                                                3) CMO do estado (azul), do SIN (preto tracejado) e dos
+                                                   3 estados vizinhos de maior capacidade de divisa
+                                                   ($/MWh), todas as horas;
+                                                4) CMO nas barras das renováveis no momento em que
+                                                   verteram (azul, ponderado pelo MW vertido) x CMO do SIN
+                                                   e dos 3 vizinhos nesses mesmos momentos. Azul abaixo do
+                                                   SIN = gargalo (faixa rosa);
+                                                5) o mesmo para as hidrelétricas;
+                                                6) carregamento (% do limite físico do deck) das 4
                                                    linhas/trafos monitorados que mais limitam o estado:
                                                    mediana (cheia) e 95% (pontilhado), 100% tracejado;
-                                                6) circuitos não monitorados acima de 100%, se houver.
+                                                7) circuitos não monitorados acima de 100%, se houver.
      injecao_x_vertimento_causa.png             vertimento por gargalo e por excesso x injeção
                                                 líquida, hora a hora, nos 6 estados com mais
                                                 vertimento

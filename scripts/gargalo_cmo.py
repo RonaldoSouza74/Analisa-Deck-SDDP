@@ -217,6 +217,8 @@ def main():
     wp = {f_: np.zeros((len(ufs), 24)) for f_ in usinas}    # soma de CMO da barra x MW vertido
     wr = {f_: np.zeros((len(ufs), 24)) for f_ in usinas}    # soma de CMO do SIN x MW vertido
     wv = {f_: np.zeros((len(ufs), 24)) for f_ in usinas}    # soma de MW vertido
+    # CMO de cada estado (2º índice) x MW vertido no estado (1º índice): CMO dos vizinhos quando o estado verteu
+    wn = {f_: np.zeros((len(ufs), len(ufs), 24)) for f_ in usinas}
 
     t0 = time.time()
     for k, e in enumerate(estagios):
@@ -257,6 +259,10 @@ def main():
                 wp[f_] += (Hd @ ((Pp * V) @ ind_uf[f_])).T
                 wr[f_] += (Hd @ ((ref[:, None] * V) @ ind_uf[f_])).T
                 wv[f_] += (Hd @ (V @ ind_uf[f_])).T
+                Wu, Cu = V @ ind_uf[f_], np.nan_to_num(dif_uf + ref[:, None])
+                for hh in range(24):
+                    sh = hd == hh
+                    wn[f_][:, :, hh] += Wu[sh].T @ Cu[sh]
                 for causa, X in ((0, vg), (1, vs)):
                     acc_usina[f_][causa] += X.sum(axis=0)
                     tot_us = X.sum(axis=0)
@@ -309,6 +315,23 @@ def main():
     ufs = ufs_orig
 
     nomes_f = {'ren': 'renovavel', 'hid': 'hidro_turbinavel'}
+    # vizinhos de cada estado: os 3 de maior capacidade de divisa (limites_pares_uf.csv da etapa 2)
+    N_VIZ = 3
+    vizinhos = {u: [] for u in ufs}
+    arq_p = os.path.join(a.caso, 'resultados_uf', 'limites_pares_uf.csv')
+    if os.path.exists(arq_p):
+        cap_par = collections.defaultdict(float)
+        with open(arq_p, encoding='utf-8-sig', newline='') as f:
+            for r in csv.DictReader(f):
+                cap = float(r['capacidade_CA_MW'] or 0) + float(r['capacidade_CC_a_para_b_MW'] or 0)
+                cap_par[(r['uf_a'], r['uf_b'])] += cap
+                cap_par[(r['uf_b'], r['uf_a'])] += cap
+        for u in ufs:
+            cand = [(cap, v) for (x, v), cap in cap_par.items() if x == u and v in ufs and v != u
+                    and cols_por_uf.get(v) is not None and len(cols_por_uf[v])]
+            vizinhos[u] = [(v, cap) for cap, v in sorted(cand, reverse=True)[:N_VIZ]]
+    else:
+        print(f'  AVISO: {arq_p} não encontrado (etapa 2); sem CMO dos estados vizinhos no perfil horário')
     # perfil por hora do dia (média do ano e dos cenários), usado pelo gráfico por estado do gargalo_linhas
     with open(os.path.join(saida, 'perfil_horario_uf.csv'), 'w', encoding='utf-8-sig', newline='') as f:
         w = csv.writer(f)
@@ -316,7 +339,11 @@ def main():
         for f_ in ('ren', 'hid'):
             cab += [f'vert_{f_}_gargalo_MW', f'vert_{f_}_excesso_MW', f'cmo_usinas_{f_}_que_verteram',
                     f'cmo_sin_quando_{f_}_verteu']
-        w.writerow(cab + ['cmo_estado', 'cmo_sin'])
+        cab += ['cmo_estado', 'cmo_sin']
+        for k in range(N_VIZ):
+            cab += [f'vizinho{k + 1}_uf', f'vizinho{k + 1}_capacidade_divisa_MW', f'vizinho{k + 1}_cmo'] + \
+                   [f'vizinho{k + 1}_cmo_quando_{f_}_verteu' for f_ in ('ren', 'hid')]
+        w.writerow(cab)
         n_dia = np.maximum(cnt_h, 1)                         # ocorrências de cada hora (dias x cenários)
 
         def linha(rot, i_uf):
@@ -332,7 +359,19 @@ def main():
                     else:
                         lin += ['', '', '', '']
                 est = cmo_uf_h[i_uf, h] / n_dia[h] if i_uf is not None else cmo_sin_h[h] / n_dia[h]
-                w.writerow(lin + [round(est, 2), round(cmo_sin_h[h] / n_dia[h], 2)])
+                lin += [round(est, 2), round(cmo_sin_h[h] / n_dia[h], 2)]
+                viz = vizinhos[rot] if i_uf is not None else []
+                for k in range(N_VIZ):
+                    if k >= len(viz):
+                        lin += ['', '', '', '', '']
+                        continue
+                    v, cap = viz[k]
+                    j_v = ufs.index(v)
+                    lin += [v, round(cap), round(cmo_uf_h[j_v, h] / n_dia[h], 2)]
+                    for f_ in ('ren', 'hid'):
+                        vv = wv[f_][i_uf, h] if f_ in wv else 0
+                        lin.append(round(wn[f_][i_uf, j_v, h] / vv, 2) if vv > 1e-6 else '')
+                w.writerow(lin)
         for i, u in enumerate(ufs):
             linha(u, i)
         linha('BR', None)

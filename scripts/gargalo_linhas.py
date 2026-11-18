@@ -137,8 +137,9 @@ def figura_estado(uf, linhas_perfil, top_m, top_n, pasta, a, NB, PASSO, horas):
 
     def col(nome):
         return np.array([float(r[nome]) if r.get(nome) not in (None, '') else np.nan for r in lin])
-    COR_REN, COR_HID, COR_EST = '#1baf7a', '#6250d6', '#2a78d6'
-    n_pain = 4 + 1 + (1 if top_n else 0)
+    COR_EST = '#2a78d6'
+    CORES_VIZ = ['#eb6834', '#1baf7a', '#eda100']
+    n_pain = 6 + (1 if top_n else 0)
     fig, axs = plt.subplots(n_pain, 1, figsize=(15, 2.5 * n_pain + 1.3), sharex=True)
     LEG = dict(loc='upper left', bbox_to_anchor=(1.01, 1.0), borderaxespad=0, frameon=False, fontsize=8)
     # 1 e 2) vertimento por causa
@@ -156,36 +157,43 @@ def figura_estado(uf, linhas_perfil, top_m, top_n, pasta, a, NB, PASSO, horas):
         ax.set_title(f'Vertimento {rot} médio por hora (MW) — {pct:.0f}% por gargalo'.replace('.', ','),
                      loc='left', fontsize=10)
         ax.set_ylabel('MW')
-    # 3) CMO do SIN e do estado (todas as horas)
-    ax = axs[2]
-    ax.plot(horas, col('cmo_sin'), color=TEXTO, linewidth=2, linestyle='--', marker='o', markersize=3,
-            label='SIN (mediana de todas\nas barras do país)')
-    ax.plot(horas, col('cmo_estado'), color=COR_EST, linewidth=2, marker='o', markersize=3,
-            label=f'{uf} (mediana de todas\nas barras do estado)')
-    ax.set_title('CMO médio por hora ($/MWh) — todas as horas do ano', loc='left', fontsize=10)
-    ax.set_ylabel('$/MWh')
-    ax.legend(**LEG)
-    # 4) CMO nas barras das usinas no momento em que verteram x SIN nos mesmos momentos
-    ax = axs[3]
-    for f_, cor, rot in (('ren', COR_REN, 'renováveis'), ('hid', COR_HID, 'hidrelétricas')):
+    # 3) CMO do SIN, do estado e dos vizinhos (todas as horas)
+    viz = []
+    for k in range(1, 4):
+        v = lin[0].get(f'vizinho{k}_uf') if lin else ''
+        if v:
+            cap = float(lin[0].get(f'vizinho{k}_capacidade_divisa_MW') or 0)
+            viz.append((k, v, f'{cap:,.0f}'.replace(',', '.')))
+
+    def linhas_cmo(ax, c_est, rot_est, c_sin, rot_sin, sufixo_viz):
+        ax.plot(horas, c_est, color=COR_EST, linewidth=2.6, marker='o', markersize=3.5, label=rot_est, zorder=5)
+        ax.plot(horas, c_sin, color=TEXTO, linewidth=2, linestyle='--', marker='o', markersize=3, label=rot_sin,
+                zorder=4)
+        for i, (k, v, cap) in enumerate(viz):
+            ax.plot(horas, col(f'vizinho{k}_cmo{sufixo_viz}'), color=CORES_VIZ[i], linewidth=1.4, marker='s',
+                    markersize=2.5, label=f'vizinho {v}\n(divisa {cap} MW)', zorder=3)
+        ax.set_ylabel('$/MWh')
+        ax.legend(**LEG)
+    linhas_cmo(axs[2], col('cmo_estado'), f'{uf} (mediana de todas\nas barras do estado)', col('cmo_sin'),
+               'SIN (mediana de todas\nas barras do país)', '')
+    axs[2].set_title(f'CMO médio por hora ($/MWh) — todas as horas do ano: {uf}, SIN e os estados vizinhos de maior '
+                     'capacidade de divisa', loc='left', fontsize=10)
+    # 4 e 5) CMO nas barras das usinas no momento em que verteram x SIN e vizinhos nos mesmos momentos
+    for ax, f_, rot in ((axs[3], 'ren', 'renováveis'), (axs[4], 'hid', 'hidrelétricas')):
         cu, cs = col(f'cmo_usinas_{f_}_que_verteram'), col(f'cmo_sin_quando_{f_}_verteu')
+        ax.set_title(f'CMO no momento em que as {rot} do estado verteram ($/MWh, ponderado pelo MW vertido) — '
+                     'azul abaixo do SIN = gargalo', loc='left', fontsize=10)
         if np.isfinite(cu).any():
-            ax.plot(horas, cu, color=cor, linewidth=2.2, marker='o', markersize=3.5,
-                    label=f'barras das {rot}\nque verteram')
-            ax.plot(horas, cs, color=cor, linewidth=1.3, linestyle='--',
-                    label=f'SIN nos momentos em que\nas {rot} verteram')
+            linhas_cmo(ax, cu, f'barras das {rot}\nque verteram', cs, 'SIN nesses\nmesmos momentos',
+                       f'_quando_{f_}_verteu')
             ax.fill_between(horas, cu, cs, where=np.isfinite(cu) & np.isfinite(cs) & (cu < cs - a.tolerancia),
                             color=COR_LIM, alpha=0.12, linewidth=0)
-    ax.set_title('CMO nas barras das usinas no momento em que verteram ($/MWh, ponderado pelo MW vertido) — '
-                 'cheia abaixo da tracejada = gargalo', loc='left', fontsize=10)
-    ax.set_ylabel('$/MWh')
-    if ax.lines:
-        ax.legend(**LEG)
-    else:
-        ax.set_yticks([])
-        ax.text(0.5, 0.5, 'sem vertimento no estado', ha='center', va='center', color=TEXTO2, transform=ax.transAxes)
+        else:
+            ax.set_yticks([])
+            ax.text(0.5, 0.5, f'sem vertimento das {rot} no estado', ha='center', va='center', color=TEXTO2,
+                    transform=ax.transAxes)
 
-    # 5 e 6) carregamento das linhas
+    # 6 e 7) carregamento das linhas
     def painel_circ(ax, lista, titulo):
         for i, d in enumerate(lista):
             cor = CORES_CIRC[i % len(CORES_CIRC)]
@@ -205,7 +213,7 @@ def figura_estado(uf, linhas_perfil, top_m, top_n, pasta, a, NB, PASSO, horas):
                                label=f'{d["nome"][:30]}\n({d["ufs"]}, limite {lim_txt} MW){extra}'))
         hand.append(Line2D([], [], color=TEXTO2, linewidth=1, linestyle=':', label='pontilhado = 95% das horas abaixo'))
         ax.legend(handles=hand, **dict(LEG, fontsize=7))
-    ax = axs[4]
+    ax = axs[5]
     if top_m:
         painel_circ(ax, top_m, 'Carregamento das principais linhas/trafos MONITORADOS do estado (% do limite físico do '
                                'deck; cheia = mediana, tracejado = 100%)')
@@ -213,7 +221,7 @@ def figura_estado(uf, linhas_perfil, top_m, top_n, pasta, a, NB, PASSO, horas):
         ax.text(0.5, 0.5, 'nenhum circuito monitorado com limite ligado ao estado', ha='center', va='center',
                 color=TEXTO2, transform=ax.transAxes)
     if top_n:
-        painel_circ(axs[5], top_n, 'Circuitos NÃO monitorados do estado acima de 100% (o SDDP não limita esses '
+        painel_circ(axs[6], top_n, 'Circuitos NÃO monitorados do estado acima de 100% (o SDDP não limita esses '
                                    'circuitos)')
     for ax in axs:
         ax.grid(axis='y', color=GRADE, linewidth=0.6)
