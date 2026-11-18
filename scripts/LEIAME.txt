@@ -210,13 +210,21 @@ ETAPAS SEPARADAS (se quiser rodar só uma)
      por_subsistema\subsistema_<ID>.png    hora do dia (1 a 24) no eixo x: vertimento renovável e
                                            hidrelétrico por tipo; CMO do subsistema, do SIN, dos
                                            3 subsistemas vizinhos e o cmgdem do SDDP; CMO no
-                                           momento em que verteu; intercâmbio com os vizinhos
+                                           momento em que verteu; intercâmbio com os vizinhos; e o
+                                           carregamento (% do limite) do circuito monitorado MAIS
+                                           CARREGADO de cada ligação, hora a hora (mediana e 95%),
+                                           com o nome do circuito que mais vezes fica no limite
      intercambios_subsistemas.png          por ligação: % das horas com CMO separado e com
                                            circuito monitorado de fronteira no limite, e o
                                            vertimento por gargalo coincidente
      vertimento_causa_subsistema_mensal.csv  GWh por subsistema, fonte, mês e tipo
      intercambios_subsistemas.csv          cada ligação: circuitos, limites, fluxo médio, % das
-                                           horas no limite e com CMO separado, por mês
+                                           horas com pelo menos 1 circuito monitorado no limite e com
+                                           CMO separado (CMO dos dois subsistemas diferente em mais
+                                           de 1 $/MWh), por mês; o circuito que mais vezes fica no
+                                           limite e o carregamento do mais carregado (mediana e 95%)
+   Atenção: a soma dos limites dos circuitos de uma ligação NÃO é a capacidade de transferência
+   (o fluxo não se divide por igual; um circuito chega ao limite muito antes da soma).
      perfil_horario_subsistema.csv         por subsistema e hora do dia: vertimento por tipo, CMOs,
                                            vizinhos e intercâmbio
      vertimento_gargalo_entre_subsistemas_horario.csv, vertimento_gargalo_dentro_subsistema_horario.csv,

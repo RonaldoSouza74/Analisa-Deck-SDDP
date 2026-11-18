@@ -50,7 +50,7 @@ from agrega_saidas_uf import mes_ano                                            
 from limites_uf import ler, SEM_LIMITE                                         # noqa: E402
 from limites_uf import num as numero                                            # noqa: E402
 from gargalo_cmo import abrir, bloco, ler_tab, mapear_usinas                    # noqa: E402
-from gargalo_linhas import circuitos_do_ano                                     # noqa: E402
+from gargalo_linhas import circuitos_do_ano, quantil_hist                       # noqa: E402
 from graficos_uf import MESES, TEXTO, TEXTO2, GRADE, FUNDO, plt, np             # noqa: E402
 
 CAUSAS = [('entre', 'gargalo entre subsistemas'), ('dentro', 'gargalo dentro do subsistema (rede interna)'),
@@ -240,9 +240,9 @@ def main():
     fator_itc = 1000.0 if itc is not None and itc['unidade'].upper().startswith('GWH') else 1.0
     np_ = len(pares)
     # por par: colunas, sinal (+1 = circuito no sentido do 1º para o 2º subsistema do par), limites
-    par_cols, par_sinal, par_lab, par_lba, par_mon = [], [], [], [], []
+    par_cols, par_sinal, par_lab, par_lba, par_mon, par_nomes = [], [], [], [], [], []
     for (i, j) in pares:
-        cs, sg, la, lb, mo = [], [], [], [], []
+        cs, sg, la, lb, mo, nm = [], [], [], [], [], []
         for n, e in elem.items():
             if {e['a'], e['b']} != {i, j}:
                 continue
@@ -252,11 +252,13 @@ def main():
             la.append(e['lim_ab'] if s_ > 0 else e['lim_ba'])
             lb.append(e['lim_ba'] if s_ > 0 else e['lim_ab'])
             mo.append(e['mon'])
+            nm.append(n)
         par_cols.append(np.array(cs, dtype=int))
         par_sinal.append(np.array(sg))
         par_lab.append(np.array(la, dtype=float))
         par_lba.append(np.array(lb, dtype=float))
         par_mon.append(np.array(mo, dtype=int))
+        par_nomes.append(nm)
     cap_ref = capacidade_interc(a.caso, sis)
     col_dem = None
     if dem is not None:
@@ -287,6 +289,12 @@ def main():
     v_coinc = np.zeros(np_)                                        # vertimento "entre" do lado barato, MWh
     h_lim_h = np.zeros((np_, 24))
     h_sep_h = np.zeros((np_, 24))
+    # carregamento (% do limite) do circuito monitorado mais carregado de cada ligação, hora a hora:
+    # histograma por hora do dia (faixas de 2,5% de 0 a 150% + acima) para tirar mediana e 95%
+    NB, PASSO = 61, 0.025
+    hist_max = np.zeros((np_, 24, NB), dtype=np.int64)
+    n_lim_circ = [np.zeros(len(par_cols[q])) for q in range(np_)]     # horas de cada circuito no limite
+    n_max_circ = [np.zeros(len(par_cols[q])) for q in range(np_)]     # horas em que é o mais carregado
     horario = {k: [] for k, _ in CAUSAS}                           # (estágio, cenário, horas x subsistema) MW
     cmo_hor = []
     n_horas = 0
@@ -345,8 +353,15 @@ def main():
                     fl_pos[q] += (liq > 0).sum()
                     lim = np.where(Fq >= 0, par_lab[q], par_lba[q])
                     com = (lim < SEM_LIMITE) & (lim > 0) & (par_mon[q] == 1)
-                    no_lim = (np.abs(Fq) >= carr * np.where(com, lim, np.inf)).any(axis=1) if com.any() \
-                        else np.zeros(nh, dtype=bool)
+                    if com.any():
+                        car = np.abs(Fq) / np.where(com, lim, np.inf)                      # fração do limite
+                        no_lim = (car >= carr).any(axis=1)
+                        n_lim_circ[q] += (car >= carr).sum(axis=0)
+                        np.add.at(n_max_circ[q], car.argmax(axis=1), 1)
+                        faixa = np.minimum((car.max(axis=1) / PASSO).astype(np.int64), NB - 1)
+                        np.add.at(hist_max[q], (hd, faixa), 1)
+                    else:
+                        no_lim = np.zeros(nh, dtype=bool)
                     s_ij = np.abs(Ps[:, i] - Ps[:, j]) > tol
                     h_lim[q] += no_lim.sum()
                     h_lim_m[q, m] += no_lim.sum()
@@ -445,6 +460,15 @@ def main():
                 w.writerow(lin)
 
     tot_h = max(n_horas, 1)
+
+    def circ_destaque(q):
+        """Circuito da ligação que mais vezes fica no limite (ou, se nenhum chega, o que mais vezes é o
+        mais carregado): (nome, limite em MW, % das horas no limite, % das horas como o mais carregado)."""
+        if not len(par_cols[q]) or (n_lim_circ[q].sum() == 0 and n_max_circ[q].sum() == 0):
+            return None
+        c_ = int(n_lim_circ[q].argmax()) if n_lim_circ[q].sum() else int(n_max_circ[q].argmax())
+        lim_c = min(par_lab[q][c_], par_lba[q][c_])
+        return (par_nomes[q][c_], lim_c, 100 * n_lim_circ[q][c_] / tot_h, 100 * n_max_circ[q][c_] / tot_h)
     if np_:
         with open(os.path.join(saida, 'intercambios_subsistemas.csv'), 'w', encoding='utf-8-sig', newline='') as f:
             w = csv.writer(f)
@@ -455,7 +479,10 @@ def main():
                         'fluxo_medio_de_para_MW', 'pct_horas_fluxo_de_para', 'pct_horas_circuito_monitorado_no_limite',
                         'pct_horas_cmo_separado', 'pct_horas_cmo_separado_e_circuito_no_limite',
                         'pct_horas_separado_com_de_mais_barato', 'pct_horas_separado_com_para_mais_barato',
-                        'vertimento_gargalo_entre_coincidente_GWh'] +
+                        'vertimento_gargalo_entre_coincidente_GWh', 'circuito_que_mais_fica_no_limite',
+                        'limite_desse_circuito_MW', 'pct_horas_desse_circuito_no_limite',
+                        'pct_horas_em_que_e_o_mais_carregado', 'carregamento_mediano_do_mais_carregado_pct',
+                        'carregamento_p95_do_mais_carregado_pct'] +
                        [f'pct_horas_no_limite_{mm}' for mm in MESES])
             for q, (i, j) in enumerate(pares):
                 la, lb = par_lab[q], par_lba[q]
@@ -469,6 +496,10 @@ def main():
                             round(100 * h_sep_lim[q] / tot_h, 2),
                             round(100 * lado_baixo[q, 0] / tot_h, 2), round(100 * lado_baixo[q, 1] / tot_h, 2),
                             round(v_coinc[q] / n_cen / 1000, 1)] +
+                           ([d_[0], round(d_[1]), round(d_[2], 2), round(d_[3], 2)] if (d_ := circ_destaque(q)) else
+                            ['', '', '', '']) +
+                           [quantil_hist(np.repeat(hist_max[q].sum(axis=0, keepdims=True), 24, axis=0), x_, NB, PASSO)[0]
+                            if hist_max[q].sum() else '' for x_ in (0.5, 0.95)] +
                            [round(100 * h_lim_m[q, mm] / max(horas_mes[mm], 1), 2) for mm in range(12)])
 
     # --- gráficos ---------------------------------------------------------------------------
@@ -545,7 +576,7 @@ def main():
     LEG = dict(loc='upper left', bbox_to_anchor=(1.01, 1.0), borderaxespad=0, frameon=False, fontsize=8)
     for k in ordem:
         tem_itc = bool(viz[k])
-        n_pain = 5 + (1 if tem_itc else 0)
+        n_pain = 5 + (2 if tem_itc else 0)
         fig, axs = plt.subplots(n_pain, 1, figsize=(15, 2.5 * n_pain + 1.3), sharex=True)
         for ax, (f_, rot) in zip(axs[:2], FONTES):
             if f_ not in usinas or acc_h[f_][:, k].sum() <= 0:
@@ -601,14 +632,44 @@ def main():
             ax = axs[5]
             for v_, (o, q) in enumerate(viz[k]):
                 sg = 1 if pares[q][0] == k else -1
+                n_mon = int(((par_lab[q] < SEM_LIMITE) & (par_lab[q] > 0) & (par_mon[q] == 1)).sum())
                 ax.plot(horas, sg * fl_h[q] / n_dia, color=CORES_VIZ[v_], linewidth=2,
-                        label=f'{ids[k]} → {ids[o]}\n({100 * h_lim[q] / tot_h:.1f}% h com circuito no limite;\n'
-                              f'{100 * h_sep[q] / tot_h:.1f}% h com CMO separado)'.replace('.', ','))
+                        label=(f'{ids[k]} → {ids[o]}: em {100 * h_lim[q] / tot_h:.1f}% das horas, pelo\n'
+                               f'menos 1 dos {n_mon} circuitos monitorados estava\nno limite; em '
+                               f'{100 * h_sep[q] / tot_h:.1f}% das horas o CMO\ndo {ids[k]} e do {ids[o]} estava '
+                               f'diferente').replace('.', ','))
             ax.axhline(0, color=TEXTO2, linewidth=0.8)
             ax.set_ylabel('MW')
             ax.set_title(f'Intercâmbio médio com os vizinhos (MW, soma dos fluxos nos circuitos de fronteira, interc) '
                          f'— positivo = {ids[k]} exporta', loc='left', fontsize=10)
-            ax.legend(**LEG)
+            ax.legend(**dict(LEG, fontsize=7.5))
+            # carregamento do circuito mais carregado de cada ligação
+            ax = axs[6]
+            from matplotlib.lines import Line2D
+            hand = []
+            for v_, (o, q) in enumerate(viz[k]):
+                if not hist_max[q].sum():
+                    continue
+                cor_ = CORES_VIZ[v_]
+                ax.plot(horas, quantil_hist(hist_max[q], 0.5, NB, PASSO), color=cor_, linewidth=2)
+                ax.plot(horas, quantil_hist(hist_max[q], 0.95, NB, PASSO), color=cor_, linewidth=1, linestyle=':')
+                d_ = circ_destaque(q)
+                txt = f'{ids[k]} — {ids[o]}'
+                if d_:
+                    lim_t = f'{d_[1]:,.0f}'.replace(',', '.')
+                    if d_[2] > 0:
+                        txt += (f'\nmais vezes no limite: {d_[0][:30]}\n(limite {lim_t} MW; ' +
+                                f'{d_[2]:.1f}% das horas no limite)'.replace('.', ','))
+                    else:
+                        txt += (f'\nnenhum no limite; o mais carregado com mais\nfrequência: {d_[0][:30]} '
+                                f'(limite {lim_t} MW)')
+                hand.append(Line2D([], [], color=cor_, linewidth=2, label=txt))
+            hand.append(Line2D([], [], color=TEXTO2, linewidth=1, linestyle=':', label='pontilhado = 95% das horas abaixo'))
+            ax.axhline(100, color=TEXTO, linewidth=1.2, linestyle='--')
+            ax.set_ylabel('% do limite')
+            ax.set_title('Carregamento do circuito monitorado MAIS CARREGADO de cada ligação, a cada hora (% do seu '
+                         'limite físico; cheia = mediana, tracejado = 100%)', loc='left', fontsize=10)
+            ax.legend(handles=hand, **dict(LEG, fontsize=7))
         for ax in axs:
             ax.grid(axis='y', color=GRADE, linewidth=0.6)
             ax.set_axisbelow(True)
@@ -636,9 +697,9 @@ def main():
         rot_p = [f'{ids[pares[q][0]]} — {ids[pares[q][1]]}' for q in ordem_p]
         ax = axs[0]
         ax.barh(y + 0.18, [100 * h_sep[q] / tot_h for q in ordem_p], height=0.36, color=COR['entre'],
-                label='CMO separado entre os dois subsistemas')
+                label='CMO dos dois subsistemas diferente (> tolerância)')
         ax.barh(y - 0.18, [100 * h_lim[q] / tot_h for q in ordem_p], height=0.36, color='#2a78d6',
-                label='algum circuito monitorado de fronteira no limite')
+                label='pelo menos 1 circuito monitorado da ligação no limite')
         ax.set_yticks(y, rot_p, fontsize=8.5)
         ax.set_xlabel('% das horas do ano (todos os cenários)')
         ax.set_title('Ligações entre subsistemas: % das horas com preço separado e com circuito no limite',
