@@ -6,7 +6,7 @@ rem Deixe este arquivo na mesma pasta de gargalo_subsistema.py, das tabelas .csv
 
 cd /d "%~dp0"
 echo.
-echo Cole o caminho da pasta do caso SDDP (com cmgbus, vergnd, envetu, interc, cmgdem .hdr/.bin
+echo Cole o caminho da pasta do caso SDDP (com cmgbus, vergnd, envetu, interc .hdr/.bin
 echo e os arquivos sistem.dat, interc.dat, dcirc.dat, dtrans.dat, ddcline.dat... do deck) e tecle Enter:
 set CASO=
 set /p CASO=Pasta do caso: 

@@ -202,14 +202,14 @@ ETAPAS SEPARADAS (se quiser rodar só uma)
    subsistemas, que a saída interc.bin traz circuito a circuito. O script soma esses fluxos por
    par de subsistemas e compara com os limites físicos dos circuitos (Rating/Rn; elos CC pelos
    conversores). A capacidade do interc.dat aparece só como referência.
-   Precisa na pasta do caso: cmgbus, vergnd e, se houver, envetu, interc e cmgdem (.hdr/.bin);
+   Precisa na pasta do caso: cmgbus, vergnd e, se houver, envetu e interc (.hdr/.bin);
    sistem.dat, interc.dat, dcirc/mcirc, dtrans/mtrans, ddcline, dcnvlcc/mcnvlcc, dseriescap.
    Saídas em resultados_uf\gargalo_subsistema:
      resumo_subsistemas.png                vertimento no ano por subsistema e tipo
      mensal_subsistemas.png                o mesmo mês a mês, um painel por subsistema
      por_subsistema\subsistema_<ID>.png    hora do dia (1 a 24) no eixo x: vertimento renovável e
-                                           hidrelétrico por tipo; CMO do subsistema, do SIN, dos
-                                           3 subsistemas vizinhos e o cmgdem do SDDP; CMO no
+                                           hidrelétrico por tipo; CMO do subsistema, do SIN e dos
+                                           3 subsistemas ligados a ele; CMO no
                                            momento em que verteu; intercâmbio com os vizinhos; e o
                                            carregamento (% do limite) do circuito monitorado MAIS
                                            CARREGADO de cada ligação, hora a hora (mediana e 95%),

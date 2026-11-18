@@ -202,7 +202,7 @@ def main():
                 faixa(ax, horas, cmo_sin, hd, m, COR_SIN, 'SIN (mediana das barras)', largura=1.6, banda=False,
                       estilo='--')
             for k, u in enumerate(viz):
-                faixa(ax, horas, cmo_viz[u], hd, m, COR_VIZ[k], f'vizinho: {u}', largura=1.3, banda=False)
+                faixa(ax, horas, cmo_viz[u], hd, m, COR_VIZ[k], u, largura=1.3, banda=False)
             if cmo_uf is not None:
                 faixa(ax, horas, cmo_uf, hd, m, COR_UF, f'{uf} (mediana das barras)', largura=2.2)
             # 4) circuitos

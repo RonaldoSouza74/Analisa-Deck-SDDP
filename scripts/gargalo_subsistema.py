@@ -29,7 +29,7 @@ esses fluxos, circuito a circuito. Para cada par de subsistemas este script soma
 CC pela capacidade dos conversores) e conta as horas com circuito monitorado no limite e com
 CMO separado entre os dois subsistemas. A capacidade do interc.dat aparece só como referência.
 
-Precisa na pasta do caso: cmgbus, vergnd (e, se houver, envetu, interc, cmgdem) em .hdr/.bin;
+Precisa na pasta do caso: cmgbus, vergnd (e, se houver, envetu e interc) em .hdr/.bin;
 sistem.dat, dcirc/mcirc/circstatus, dtrans/mtrans/transtatus, ddcline/mdcline/dclinestatus,
 dcnvlcc/mcnvlcc, dseriescap e interc.dat do deck (os que faltarem ficam de fora, com aviso).
 
@@ -167,18 +167,15 @@ def main():
     cmg = abrir(a.caso, 'cmgbus')
     fontes = {'ren': abrir(a.caso, 'vergnd'), 'hid': abrir(a.caso, 'envetu', obrigatorio=False)}
     itc = abrir(a.caso, 'interc', obrigatorio=False)
-    dem = abrir(a.caso, 'cmgdem', obrigatorio=False)
-    for nome_h, h in (('vergnd', fontes['ren']), ('envetu', fontes['hid']), ('interc', itc), ('cmgdem', dem)):
+    for nome_h, h in (('vergnd', fontes['ren']), ('envetu', fontes['hid']), ('interc', itc)):
         if h is not None and (h['horas'] != cmg['horas'] or h['n_cen'] != cmg['n_cen']):
             print(f'  AVISO: {nome_h} tem horas/cenários diferentes do cmgbus (outra rodada?); fica de fora')
             if nome_h in ('vergnd',):
                 sys.exit('ERRO: vergnd e cmgbus precisam ser da mesma rodada')
             if nome_h == 'envetu':
                 fontes['hid'] = None
-            elif nome_h == 'interc':
-                itc = None
             else:
-                dem = None
+                itc = None
     fontes = {k: v for k, v in fontes.items() if v is not None}
     estagios = [e for e in range(cmg['n_estagios']) if mes_ano(cmg, e)[1] == a.ano]
     if not estagios:
@@ -260,10 +257,6 @@ def main():
         par_mon.append(np.array(mo, dtype=int))
         par_nomes.append(nm)
     cap_ref = capacidade_interc(a.caso, sis)
-    col_dem = None
-    if dem is not None:
-        nd = {n.strip().upper(): i for i, n in enumerate(dem['nomes'])}
-        col_dem = np.array([nd.get(s[1].upper(), -1) for s in sis], dtype=int)
 
     # --- acumuladores -------------------------------------------------------------------
     meses = [mes_ano(cmg, e)[0] for e in estagios]
@@ -277,7 +270,6 @@ def main():
     cnt_h = np.zeros(24)
     cmo_sin_h = np.zeros(24)
     cmo_sub_h = np.zeros((ns, 24))
-    dem_h = np.zeros((ns, 24))
     horas_mes = np.zeros(12)
     fl_h = np.zeros((np_, 24))                                     # fluxo líquido do par (MW), 1º -> 2º
     fl_pos = np.zeros(np_)                                         # horas com fluxo 1º -> 2º
@@ -314,10 +306,6 @@ def main():
             cnt_h += Hd.sum(axis=1)
             cmo_sin_h += Hd @ ref
             cmo_sub_h += (Hd @ Ps).T
-            if col_dem is not None:
-                Dm = bloco(dem, e, c)
-                Dm = np.column_stack([Dm[:, j] if j >= 0 else np.full(nh, np.nan) for j in col_dem])
-                dem_h += (Hd @ np.nan_to_num(Dm)).T
             sep = Ps < ref[:, None] - tol                         # subsistema preso (horas x subsistema)
             hor_c = {k: np.zeros((nh, ns)) for k, _ in CAUSAS}
             for f_, h in fontes.items():
@@ -434,7 +422,7 @@ def main():
             cab += [f'vert_{f_}_{cz}_MW' for cz, _ in CAUSAS] + \
                    [f'cmo_subsistema_quando_{f_}_verteu', f'cmo_barras_quando_{f_}_verteu',
                     f'cmo_sin_quando_{f_}_verteu']
-        cab += ['cmo_subsistema', 'cmo_sin', 'cmgdem_sddp']
+        cab += ['cmo_subsistema', 'cmo_sin']
         for v_ in range(3):
             cab += [f'vizinho{v_ + 1}', f'vizinho{v_ + 1}_cmo', f'intercambio_para_vizinho{v_ + 1}_MW']
         w.writerow(cab)
@@ -448,8 +436,7 @@ def main():
                     vv = w_v[f_][k, hh]
                     lin += [round(acc_h[f_][k_c, k, hh] / n_dia[hh], 2) for k_c in range(nc)]
                     lin += [round(X[k, hh] / vv, 2) if vv > 1e-6 else '' for X in (w_sub[f_], w_bar[f_], w_sin[f_])]
-                lin += [round(cmo_sub_h[k, hh] / n_dia[hh], 2), round(cmo_sin_h[hh] / n_dia[hh], 2),
-                        round(dem_h[k, hh] / n_dia[hh], 2) if col_dem is not None and col_dem[k] >= 0 else '']
+                lin += [round(cmo_sub_h[k, hh] / n_dia[hh], 2), round(cmo_sin_h[hh] / n_dia[hh], 2)]
                 for v_ in range(3):
                     if v_ < len(viz[k]):
                         o, q = viz[k][v_]
@@ -605,13 +592,11 @@ def main():
                         zorder=3)
             ax.set_ylabel('$/MWh')
             ax.legend(**LEG)
-        extra = [(CORES_VIZ[v_], '-', cmo_sub_h[o] / n_dia, f'vizinho {ids[o]} ({sis[o][1]})')
+        extra = [(CORES_VIZ[v_], '-', cmo_sub_h[o] / n_dia, f'{ids[o]} ({sis[o][1]})')
                  for v_, (o, q) in enumerate(viz[k])]
-        if col_dem is not None and col_dem[k] >= 0:
-            extra.append((TEXTO2, ':', dem_h[k] / n_dia, f'cmgdem do SDDP\n({ids[k]})'))
         linhas_cmo(axs[2], cmo_sub_h[k] / n_dia, f'{ids[k]} (mediana das\nbarras do subsistema)', cmo_sin_h / n_dia,
                    'SIN (mediana de todas\nas barras do país)', extra)
-        axs[2].set_title(f'CMO médio por hora ($/MWh) — todas as horas: {ids[k]}, SIN e subsistemas vizinhos',
+        axs[2].set_title(f'CMO médio por hora ($/MWh) — todas as horas: {ids[k]}, SIN e subsistemas ligados ao {ids[k]}',
                          loc='left', fontsize=10)
         for ax, (f_, rot) in zip(axs[3:5], FONTES):
             ax.set_title(f'CMO no momento em que o {rot.split(" ")[0]} do subsistema verteu ($/MWh, ponderado pelo MW '

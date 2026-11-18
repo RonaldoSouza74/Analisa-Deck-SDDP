@@ -171,7 +171,7 @@ def figura_estado(uf, linhas_perfil, top_m, top_n, pasta, a, NB, PASSO, horas):
                 zorder=4)
         for i, (k, v, cap) in enumerate(viz):
             ax.plot(horas, col(f'vizinho{k}_cmo{sufixo_viz}'), color=CORES_VIZ[i], linewidth=1.4, marker='s',
-                    markersize=2.5, label=f'vizinho {v}\n(divisa {cap} MW)', zorder=3)
+                    markersize=2.5, label=f'{v}\n(divisa {cap} MW)', zorder=3)
         ax.set_ylabel('$/MWh')
         ax.legend(**LEG)
     linhas_cmo(axs[2], col('cmo_estado'), f'{uf} (mediana de todas\nas barras do estado)', col('cmo_sin'),
