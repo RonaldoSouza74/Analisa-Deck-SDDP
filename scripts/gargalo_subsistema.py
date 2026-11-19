@@ -59,7 +59,6 @@ COR = {'entre': '#e34948', 'dentro': '#eb6834', 'exc': '#8a8984'}
 FONTES = [('ren', 'renovável (sem GD)'), ('hid', 'hidrelétrico (vertimento turbinável)')]
 CORES_VIZ = ['#1baf7a', '#6250d6', '#e87ba4']
 COR_SUB = '#2a78d6'
-FRAC_POUCO = 0.02    # horas com vertimento < 2% da maior hora do dia: CMO no momento do vertimento apagado
 
 
 def ler_sistemas(caso, barras):
@@ -590,31 +589,16 @@ def main():
                          f'{100 * V[1].sum() / tot:.0f}% dentro do subsistema', loc='left', fontsize=10)
             ax.set_ylabel('MW')
 
-        def linhas_cmo(ax, c_sub, rot_sub, c_sin, rot_sin, extra=(), ok=None):
-            """ok: horas com vertimento suficiente; as demais ficam apagadas (preço pouco representativo)."""
-            series = [(c_sub, dict(color=COR_SUB, linewidth=2.6, marker='o', markersize=3.5, label=rot_sub, zorder=5)),
-                      (c_sin, dict(color=TEXTO, linewidth=2, linestyle='--', marker='o', markersize=3, label=rot_sin,
-                                   zorder=4))]
+        def linhas_cmo(ax, c_sub, rot_sub, c_sin, rot_sin, extra=()):
+            ax.plot(horas, c_sub, color=COR_SUB, linewidth=2.6, marker='o', markersize=3.5, label=rot_sub, zorder=5)
+            ax.plot(horas, c_sin, color=TEXTO, linewidth=2, linestyle='--', marker='o', markersize=3, label=rot_sin,
+                    zorder=4)
             for cor_, est_, y_, rot_ in extra:
-                # por cima e pontilhado: aparece mesmo quando coincide com o subsistema ou com o SIN
-                series.append((y_, dict(color=cor_, linewidth=2.2 if est_ == ':' else 1.4, linestyle=est_, marker='s',
-                                        markersize=4 if est_ == ':' else 2.5, label=rot_,
-                                        zorder=6 if est_ == ':' else 3)))
-            for y_, kw in series:
-                if ok is None or ok.all():
-                    ax.plot(horas, y_, **kw)
-                else:
-                    ax.plot(horas, y_, **dict(kw, label=None, alpha=0.22, markersize=2))
-                    ax.plot(horas, np.where(ok, y_, np.nan), **kw)
+                # subsistemas ligados: por cima e pontilhado (aparecem mesmo quando coincidem com o SIN)
+                ax.plot(horas, y_, color=cor_, linewidth=2.2 if est_ == ':' else 1.4, linestyle=est_, marker='s',
+                        markersize=4 if est_ == ':' else 2.5, label=rot_, zorder=6 if est_ == ':' else 3)
             ax.set_ylabel('$/MWh')
-            if ok is not None and not ok.all():
-                from matplotlib.lines import Line2D
-                h_, l_ = ax.get_legend_handles_labels()
-                h_.append(Line2D([], [], color=TEXTO2, alpha=0.3, linewidth=2, marker='o', markersize=2))
-                l_.append(f'apagado: hora com vertimento\nmenor que {100 * FRAC_POUCO:.0f}% do vertimento\nda hora de maior vertimento\n(painel de vertimento acima):\nCMO médio de poucos MW')
-                ax.legend(h_, l_, **LEG)
-            else:
-                ax.legend(**LEG)
+            ax.legend(**LEG)
         extra = [(CORES_VIZ[v_], ':', cmo_sub_h[o] / n_dia, f'{ids[o]} ({sis[o][1]})')
                  for v_, (o, q) in enumerate(viz[k])]
         linhas_cmo(axs[2], cmo_sub_h[k] / n_dia, f'{ids[k]} (mediana das\nbarras do subsistema)', cmo_sin_h / n_dia,
@@ -622,8 +606,8 @@ def main():
         axs[2].set_title(f'CMO médio por hora ($/MWh) — todas as horas: {ids[k]}, SIN e subsistemas ligados ao {ids[k]}',
                          loc='left', fontsize=10)
         for ax, (f_, rot) in zip(axs[3:5], FONTES):
-            ax.set_title(f'CMO no momento em que o {rot.split(" ")[0]} do subsistema verteu ($/MWh, ponderado pelo MW '
-                         'vertido) — azul abaixo do SIN = gargalo entre subsistemas', loc='left', fontsize=10)
+            ax.set_title(f'CMO no momento em que o {rot.split(" ")[0]} do subsistema verteu ($/MWh, média ponderada pelo '
+                         'MW vertido)', loc='left', fontsize=10)
             vv = w_v[f_][k] if f_ in usinas else np.zeros(24)
             if vv.sum() <= 0:
                 ax.set_yticks([])
@@ -632,11 +616,8 @@ def main():
                 continue
             with np.errstate(invalid='ignore', divide='ignore'):
                 cs_, cb_, cr_ = (np.where(vv > 1e-6, X[k] / vv, np.nan) for X in (w_sub[f_], w_bar[f_], w_sin[f_]))
-            vt = acc_h[f_][:, k].sum(axis=0) / n_dia                     # MW médio vertido por hora do dia
-            ok = vt >= FRAC_POUCO * vt.max() if vt.max() > 0 else np.ones(24, bool)
-            linhas_cmo(ax, cs_, f'{ids[k]}', cr_, 'SIN',
-                       [(COR['dentro'], '-', cb_, 'barras das usinas\nque verteram')], ok=ok)
-            ax.fill_between(horas, cs_, cr_, where=ok & np.isfinite(cs_) & np.isfinite(cr_) & (cs_ < cr_ - tol),
+            linhas_cmo(ax, cs_, f'{ids[k]}', cr_, 'SIN', [(COR['dentro'], '-', cb_, 'barras das usinas\nque verteram')])
+            ax.fill_between(horas, cs_, cr_, where=np.isfinite(cs_) & np.isfinite(cr_) & (cs_ < cr_ - tol),
                             color=COR['entre'], alpha=0.12, linewidth=0)
         if tem_itc:
             ax = axs[5]
@@ -691,14 +672,8 @@ def main():
                    bbox_to_anchor=(0.005, 1 - 0.42 / fig.get_figheight()))
         fig.suptitle(f'Subsistema {ids[k]} ({sis[k][1]}) — vertimento, CMO e intercâmbio por hora do dia, {a.ano}',
                      x=0.01, y=1 - 0.12 / fig.get_figheight(), ha='left', fontsize=13, fontweight='bold')
-        fig.text(0.01, 0.004, f'Médias de todas as horas do ano e de todos os cenários. Entre subsistemas = CMO do '
-                 f'subsistema mais de {tol:g} \\$/MWh abaixo do SIN; dentro = barra da usina mais de {tol:g} \\$/MWh abaixo '
-                 'do subsistema. Sem a geração distribuída (MMGD/OMGD).\nPainéis "CMO no momento em que verteu": hora '
-                 f'apagada = vertimento médio nessa hora menor que {100 * FRAC_POUCO:.0f}% do vertimento médio da hora de '
-                 'maior vertimento (barras do painel de vertimento); o CMO dessa hora vem de poucos MW e não representa o '
-                 'vertimento do dia.', fontsize=7.5, color=TEXTO2)
         fig.subplots_adjust(left=0.055, right=0.78, top=1 - 0.95 / fig.get_figheight(),
-                            bottom=0.75 / fig.get_figheight(), hspace=0.5)
+                            bottom=0.55 / fig.get_figheight(), hspace=0.5)
         fig.savefig(os.path.join(pasta, f'subsistema_{ids[k]}.png'), dpi=115)
         plt.close(fig)
 

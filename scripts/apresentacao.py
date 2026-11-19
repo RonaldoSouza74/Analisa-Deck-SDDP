@@ -448,14 +448,29 @@ def main():
         '• A geração distribuída (MMGD/OMGD) fica fora do vertimento: na operação real ela não é cortada '
         '(no deck tem custo de corte 11 $/MWh, contra 10 das centralizadas).',
         '• Hora 1 = 00h–01h.'])
-    D.texto('Como separamos gargalo de excesso', [
-        '• Sem limite de rede ativo, o custo marginal (CMO) é praticamente o mesmo em todas as barras.',
-        '• Quando um circuito chega ao limite, o CMO se separa: atrás do gargalo ele cai (energia presa).',
-        '• Por barra: CMO da barra da usina mais de 1 $/MWh abaixo do CMO do SIN (mediana de todas as '
-        'barras) → GARGALO DE TRANSMISSÃO; senão → EXCESSO NO SISTEMA (falta de demanda).',
-        '• Por subsistema: CMO do subsistema (mediana das suas barras) abaixo do SIN → gargalo ENTRE '
-        'subsistemas; subsistema no preço do SIN e barra abaixo dele → gargalo DENTRO do subsistema.',
-        '• As linhas que limitam: fluxo do SDDP ≥ 99% do limite físico do deck (Rating/Rn).'])
+    D.texto('O que é o CMO e por que ele mostra o gargalo', [
+        '• O CMO (custo marginal de operação) de uma barra é quanto custaria atender 1 MWh a mais de carga naquela '
+        'barra, naquela hora. O SDDP calcula esse valor para cada barra (saída cmgbus).',
+        '• Se nenhuma linha está no limite, a energia chega a qualquer barra pelo mesmo custo: o CMO é igual em todo o SIN.',
+        '• Se uma linha chega ao limite, a energia de um lado não consegue passar para o outro. Do lado em que sobra '
+        'energia, 1 MWh a mais não tem para onde ir e o CMO cai (fica perto de zero). Do outro lado, ele fica mais alto.',
+        '• Por isso: se uma usina verte e o CMO da barra dela está ABAIXO do CMO do SIN, a energia dela está presa atrás '
+        'de uma linha no limite → vertimento por GARGALO DE TRANSMISSÃO.',
+        '• Se a usina verte e o CMO da barra dela é IGUAL ao do SIN (mesmo perto de zero), sobra energia no país inteiro '
+        '→ vertimento por EXCESSO NO SISTEMA (falta de demanda).'],
+        notas='CMO de cada barra: arquivo cmgbus do SDDP. Barra de cada usina: busconnection.dat e hydrounit??.dat.')
+    D.texto('Como cada MW vertido é classificado', [
+        '• A classificação é feita em cada hora, em cada cenário e para cada usina que verteu.',
+        '• CMO do SIN = mediana do CMO de todas as barras do SIN (metade das barras acima, metade abaixo). Representa o '
+        'preço do sistema sem ser puxado por poucas barras com valores extremos.',
+        '• Por estado: CMO da barra da usina abaixo do CMO do SIN → GARGALO (vermelho); igual → EXCESSO (cinza).',
+        '• Por subsistema: CMO do subsistema (mediana das barras do subsistema) abaixo do SIN → gargalo ENTRE '
+        'subsistemas (vermelho): o subsistema inteiro está preso. Subsistema no preço do SIN, mas a barra da usina abaixo '
+        'do subsistema → gargalo DENTRO do subsistema (laranja): só a rede perto da usina está no limite. Nenhum dos '
+        'dois → EXCESSO (cinza).',
+        '• "Abaixo" quer dizer mais de 1 $/MWh abaixo. Diferenças menores aparecem por perdas e arredondamentos e não '
+        'indicam linha no limite; por isso são tratadas como preço igual.',
+        '• A geração distribuída (MMGD/OMGD) fica fora: na operação real ela não é cortada.'])
 
     # A. quanto e onde
     D.secao('Quanto e onde', 'Vertimento por estado e tecnologia')
@@ -514,6 +529,17 @@ def main():
     ler_sub = ['Como ler', '• Barras: vertimento por tipo (vermelho = entre subsistemas, laranja = dentro do '
                'subsistema, cinza = excesso).', '• Azul abaixo do preto tracejado = subsistema preso.',
                '• Último painel: o circuito da ligação mais perto do limite (100% = no limite).']
+    D.texto('Como ler o gráfico de cada subsistema', [
+        'Todos os painéis têm a hora do dia no eixo x (1 = 00h–01h) e são médias de todos os dias e cenários do ano.',
+        '1. Vertimento renovável por hora (MW médio): vermelho = entre subsistemas, laranja = dentro do subsistema, '
+        'cinza = excesso.',
+        '2. O mesmo para o vertimento turbinável das hidrelétricas.',
+        '3. CMO por hora em todas as horas: subsistema (azul), SIN (preto tracejado) e subsistemas ligados (pontilhados).',
+        '4 e 5. CMO só nos momentos em que houve vertimento, renovável e hidrelétrico, com peso pelo MW vertido: '
+        'Σ(CMO × MW vertido) ÷ Σ MW vertido. Faixa rosa = subsistema abaixo do SIN. Uma hora pode mostrar diferença de '
+        'CMO e quase nenhuma barra no painel 1: é o preço de poucos MW vertidos.',
+        '6. Intercâmbio médio com cada subsistema ligado (MW; positivo = exporta).',
+        '7. Carregamento do circuito mais carregado de cada ligação (% do limite físico; 100% = no limite).'])
     for k in N.get('ordem_sub', [])[:3]:
         v = N['sub'][k]
         D.imagem(f'Subsistema {k} ({N["sub_nome"].get(k, "")}): {br(v.sum())} GWh vertidos, '
@@ -537,6 +563,17 @@ def main():
 
     # F. estados com mais vertimento
     D.secao('Estados com mais vertimento', ', '.join(top5) if top5 else '')
+    D.texto('Como ler o gráfico de cada estado', [
+        'Todos os painéis têm a hora do dia no eixo x (1 = 00h–01h) e são médias de todos os dias e cenários do ano.',
+        '1. Vertimento renovável por hora (MW médio): vermelho = gargalo de transmissão, cinza = excesso no sistema.',
+        '2. O mesmo para o vertimento turbinável das hidrelétricas.',
+        '3. CMO por hora em todas as horas: estado (azul, mediana das barras do estado), SIN (preto tracejado) e os 3 '
+        'estados com maior capacidade de divisa (pontilhados).',
+        '4 e 5. CMO só nos momentos em que houve vertimento, renovável e hidrelétrico, com peso pelo MW vertido: '
+        'barras das usinas que verteram (azul) × SIN e estados de divisa. Faixa rosa = barras abaixo do SIN.',
+        '6. Carregamento das 4 linhas/trafos monitorados que mais limitam o estado (% do limite físico; 100% = no '
+        'limite).',
+        '7. Circuitos não monitorados acima de 100% (o SDDP não limita esses circuitos), se houver.'])
     ler_est = ['Como ler', '• Barras: vermelho = gargalo, cinza = excesso.',
                '• CMO: azul (estado ou barras das usinas) abaixo do SIN (preto tracejado) = gargalo.',
                '• Linhas: 100% tracejado = limite físico do deck.']
