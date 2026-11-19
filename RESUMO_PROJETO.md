@@ -150,6 +150,7 @@ Atualizado em 15/11/2026.
 | 10 | `rodar_balanco.bat` | `balanco_uf.py` | Balanço por UF: renovável + hidro (gerhid) + térmica (gerter) − carga (demxba) = injeção; consumido no estado / exportado (contorno roxo) / vertido (hachurado), separado por situação da hora; também **por subsistema** (`balanco_subsistema\balanco_<ID>.png`, hachurado entre/dentro/excesso; usa `<var>_subsistema_horario.csv` da etapa 1 e a etapa 9) |
 | — | `rodar_apresentacao.bat` | `apresentacao.py` | Monta `resultados_uf\apresentacao\apresentacao_vertimento_<ano>.pptx` (python-pptx) com os PNGs das etapas e títulos calculados dos CSVs; gera `mapa_vertimento_uf.png` (mapa do Brasil por UF, contorno IBGE em `mapa_uf.json`) e `tecnologia_uf.png` (ano, sem GD); divide figuras altas em 2–3 slides |
 | — | `rodar_apresentacao_detalhada.bat` | `apresentacao_detalhada.py` | PowerPoint só com balanço, situação das horas e circuitos: Brasil → subsistemas → estados, com quadro "Como ler" e notas |
+| — | `rodar_exemplo_cmo.bat` | `exemplo_cmo.py` | Exemplo com dados reais: para um subsistema, hora do dia e fonte, lista todos os momentos com vertimento (MW, CMO da barra, do subsistema e do SIN, classificação) e faz Σ(CMO×MW)÷ΣMW e ΣMW÷vezes da hora, reproduzindo os pontos do `subsistema_<ID>.png` |
 | — | `rodar_tudo.bat` | `com_log.py` | Roda as 10 etapas (9 = subsistemas antes de 10 = balanço; pode pular a etapa 1 com S, se os resultados dela existirem) e grava o log |
 | — | (sem .bat) | `barras_uf.py` | Refaz as tabelas de UF a partir do deck |
 

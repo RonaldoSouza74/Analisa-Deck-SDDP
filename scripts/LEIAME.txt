@@ -286,6 +286,16 @@ APRESENTAÇÃO DETALHADA: rodar_apresentacao_detalhada.bat  -> apresentacao_deta
    direita um quadro "Como ler" e, nas anotações do apresentador, a explicação completa.
    Os balanços ocupam 2 slides cada; os gráficos de circuitos, 1 slide por parte de 20.
 
+EXEMPLO COM DADOS REAIS: rodar_exemplo_cmo.bat  -> exemplo_cmo.py
+   Mostra de onde vem cada ponto do gráfico subsistema_<ID>.png. Pergunta o subsistema (ex.: NE),
+   a hora do dia (ex.: 22) e a fonte (renovável ou hidrelétrica) e lista TODOS os momentos do ano
+   (mês, dia, cenário) em que alguma usina do subsistema verteu nessa hora, com o MW vertido, o
+   CMO da barra da usina, o CMO do subsistema, o CMO do SIN e a classificação. Depois faz as contas:
+     Σ(CMO × MW vertido) ÷ Σ MW vertido  = pontos do painel "CMO no momento em que verteu"
+     Σ MW de cada tipo ÷ vezes da hora    = altura e cores da barra do painel de vertimento
+   Saída em resultados_uf\gargalo_subsistema: exemplo_cmo_<SUB>_<hora>h_<fonte>.txt (as contas)
+   e .csv (todos os momentos). Lê o cmgbus e o vergnd/envetu: leva alguns minutos.
+
 barras_uf.py (sem .bat) refaz as tabelas barras_uf.csv / usinas_renovaveis_uf.csv a partir
 do deck, se a rede mudar:  python barras_uf.py "<pasta do caso>" "<pasta de saída>"
 
