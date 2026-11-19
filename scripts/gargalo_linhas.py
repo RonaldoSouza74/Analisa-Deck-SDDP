@@ -186,12 +186,12 @@ def figura_estado(uf, linhas_perfil, top_m, top_n, pasta, a, NB, PASSO, horas):
         if ok is not None and not ok.all():
             h_, l_ = ax.get_legend_handles_labels()
             h_.append(Line2D([], [], color=TEXTO2, alpha=0.3, linewidth=2, marker='o', markersize=2))
-            l_.append(f'horas com pouco vertimento\n(< {100 * FRAC_POUCO:.0f}% da maior hora):\npreço pouco representativo')
+            l_.append(f'apagado: hora com vertimento\nmenor que {100 * FRAC_POUCO:.0f}% do vertimento\nda hora de maior vertimento\n(painel de vertimento acima):\nCMO médio de poucos MW')
             ax.legend(h_, l_, **LEG)
         else:
             ax.legend(**LEG)
     linhas_cmo(axs[2], col('cmo_estado'), f'{uf} (mediana de todas\nas barras do estado)', col('cmo_sin'),
-               'SIN (mediana de todas\nas barras do país)', '')
+               'SIN (mediana de todas\nas barras do SIN)', '')
     axs[2].set_title(f'CMO médio por hora ($/MWh) — todas as horas do ano: {uf}, SIN e os 3 estados com maior '
                      f'capacidade de divisa com {uf}', loc='left', fontsize=10)
     # 4 e 5) CMO nas barras das usinas no momento em que verteram x SIN e vizinhos nos mesmos momentos
@@ -202,7 +202,7 @@ def figura_estado(uf, linhas_perfil, top_m, top_n, pasta, a, NB, PASSO, horas):
         if np.isfinite(cu).any():
             vt = np.nan_to_num(col(f'vert_{f_}_gargalo_MW')) + np.nan_to_num(col(f'vert_{f_}_excesso_MW'))
             ok = vt >= FRAC_POUCO * vt.max() if vt.max() > 0 else np.ones(24, bool)
-            linhas_cmo(ax, cu, f'barras das {rot}\nque verteram', cs, 'SIN nesses\nmesmos momentos',
+            linhas_cmo(ax, cu, f'barras das {rot}\nque verteram', cs, 'SIN',
                        f'_quando_{f_}_verteu', ok=ok)
             ax.fill_between(horas, cu, cs, where=ok & np.isfinite(cu) & np.isfinite(cs) & (cu < cs - a.tolerancia),
                             color=COR_LIM, alpha=0.12, linewidth=0)
@@ -255,7 +255,9 @@ def figura_estado(uf, linhas_perfil, top_m, top_n, pasta, a, NB, PASSO, horas):
                  y=1 - 0.12 / fig.get_figheight(), ha='left', fontsize=13, fontweight='bold')
     fig.text(0.01, 0.004, 'Médias de todas as horas do ano e de todos os cenários, por hora do dia. Gargalo = CMO da barra '
              f'da usina mais de {a.tolerancia:g} $/MWh abaixo do CMO do SIN na mesma hora e cenário. Vertimento sem a geração '
-             'distribuída (MMGD/OMGD).',
+             'distribuída (MMGD/OMGD).\nPainéis "CMO no momento em que verteram": hora apagada = vertimento médio nessa hora '
+             f'menor que {100 * FRAC_POUCO:.0f}% do vertimento médio da hora de maior vertimento (barras do painel de vertimento); '
+             'o CMO dessa hora vem de poucos MW e não representa o vertimento do dia.',
              fontsize=7.5, color=TEXTO2)
     fig.subplots_adjust(left=0.055, right=0.78, top=1 - 0.95 / fig.get_figheight(), bottom=0.75 / fig.get_figheight(),
                         hspace=0.5)

@@ -141,8 +141,8 @@ def main():
         sm = mw.sum()
         T.append('2) Painel "CMO no momento em que verteu" — Σ(CMO × MW vertido) ÷ Σ MW vertido:')
         T.append(f'   Σ MW vertido = {br(sm, 2)} MW')
-        for chave, rot in (('cmo_barra', 'barras das usinas que verteram'), ('cmo_sub', f'{sub} nesses momentos'),
-                           ('cmo_sin', 'SIN nesses momentos')):
+        for chave, rot in (('cmo_barra', 'barras das usinas que verteram'), ('cmo_sub', f'{sub}'),
+                           ('cmo_sin', 'SIN')):
             s_ = float((np.array([l_[chave] for l_ in linhas]) * mw).sum())
             T.append(f'   "{rot}": {br(s_, 1)} ÷ {br(sm, 2)} = {br(s_ / sm, 1)} $/MWh')
         T.append('')
