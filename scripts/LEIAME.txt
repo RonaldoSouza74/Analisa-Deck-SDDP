@@ -32,7 +32,9 @@ Leva alguns minutos (a etapa 1 lê os .bin de vários GB).
 ETAPAS SEPARADAS (se quiser rodar só uma)
 -----------------------------------------
 1. rodar_agregacao.bat  -> agrega_saidas_uf.py
-   Lê os .hdr/.bin do SDDP e soma por estado. Gera em <caso>\resultados_uf:
+   Lê os .hdr/.bin do SDDP e soma por estado. O vertimento (vergnd) é somado SEM a geração
+   distribuída (usinas MMGD/OMGD), que na operação real não é cortada; a geração (gergnd) inclui
+   a GD. Gera em <caso>\resultados_uf:
      <var>_uf_horario.csv     mês x cenário x hora, uma coluna por estado (formato do SDDP)
      <var>_uf_mensal.csv      mês x estado (x tecnologia), por cenário e média
      <var>_agente_mensal.csv  cada usina/barra x mês, média dos cenários

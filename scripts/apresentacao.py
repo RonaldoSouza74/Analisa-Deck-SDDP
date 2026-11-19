@@ -470,7 +470,7 @@ def main():
 
     # B. quando
     D.secao('Quando', 'Mês, hora do dia e tipo de dia')
-    nota_e3 = 'Gráficos da etapa 3 e 4: incluem a geração distribuída e o período escolhido na etapa 3.'
+    nota_e3 = 'Gráficos das etapas 3 e 4 (vertimento sem a geração distribuída; período escolhido na etapa 3).'
     D.imagem('Vertimento por mês e hora do dia', 'graficos/mapa_calor_vergnd_estados.png', notas=nota_e3)
     D.imagem('Perfil do vertimento por hora do dia, por estado', 'graficos/boxplot_vergnd_estados.png', notas=nota_e3)
     if 'fds' in N:

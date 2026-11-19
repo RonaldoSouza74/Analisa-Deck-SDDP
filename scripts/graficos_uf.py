@@ -41,7 +41,7 @@ except ImportError as e:
 
 VARS = {
     'gergnd': dict(titulo='Geração renovável', cor='#1baf7a'),
-    'vergnd': dict(titulo='Vertimento renovável', cor='#eb6834'),
+    'vergnd': dict(titulo='Vertimento renovável (sem GD)', cor='#eb6834'),
     'businj': dict(titulo='Injeção líquida nas barras', cor='#2a78d6'),
     'bus_inj': dict(titulo='Injeção líquida nas barras', cor='#2a78d6'),
 }

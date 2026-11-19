@@ -10,7 +10,7 @@ pequenos, prontos para o Excel:
 
 Variáveis procuradas na pasta do caso (as que existirem):
   gergnd  geração renovável      (por usina renovável)
-  vergnd  vertimento renovável   (por usina renovável)
+  vergnd  vertimento renovável   (por usina renovável, SEM a geração distribuída MMGD/OMGD)
   businj / bus_inj  injeção líquida por barra CA
   bus_losses        perdas por barra CA
 
@@ -159,16 +159,25 @@ def processar(var, caso, saida, usinas, barras, uf_usina, estagios=None):
     sem_uf = sum(1 for u in uf_ag if u == '??')
     if sem_uf:
         print(f'  [{var}] AVISO: {sem_uf} agentes sem UF na tabela (somados como "??")')
+    # o vertimento da geração distribuída (MMGD = GD solar, OMGD = outras GD) fica de fora: na operação real
+    # ela não é cortada (no deck tem custo de corte 11 $/MWh). A GERAÇÃO dela (gergnd) continua contando.
+    usar = [True] * n_ag
+    if var == 'vergnd':
+        usar = [not (t in ('GD Solar', 'Outras GD') or n.strip().upper().startswith(('MMGD', 'OMGD')))
+                for n, t in zip(nomes, tec_ag)]
+        print(f'  [{var}] {usar.count(False)} usinas de geração distribuída (MMGD/OMGD) fora do vertimento')
 
-    ufs = sorted(set(uf_ag))
+    ufs = sorted(set(uf_ag))                          # todos os estados (com zero onde só havia GD)
     M_uf = np.zeros((n_ag, len(ufs)))
     for i, u in enumerate(uf_ag):
-        M_uf[i, ufs.index(u)] = 1
+        if usar[i]:
+            M_uf[i, ufs.index(u)] = 1
     if tec_ag:
-        grupos = sorted(set(zip(uf_ag, tec_ag)))
+        grupos = sorted({g for g, ok in zip(zip(uf_ag, tec_ag), usar) if ok})
         M_grp = np.zeros((n_ag, len(grupos)))
         for i, g in enumerate(zip(uf_ag, tec_ag)):
-            M_grp[i, grupos.index(g)] = 1
+            if usar[i]:
+                M_grp[i, grupos.index(g)] = 1
     else:
         grupos, M_grp = [(u,) for u in ufs], M_uf
 
@@ -237,6 +246,8 @@ def processar(var, caso, saida, usinas, barras, uf_usina, estagios=None):
     horas_est = np.diff(hdr['horas'])[lista_est]
     linhas = []
     for i, n in enumerate(nomes):
+        if not usar[i]:
+            continue
         v = agente[lista_est, i]
         tot = v.sum() if energia else (v * horas_est).sum() / horas_est.sum()
         linhas.append([n, uf_ag[i]] + ([tec_ag[i]] if tec_ag else []) + [num(x) for x in v] + [num(tot)])

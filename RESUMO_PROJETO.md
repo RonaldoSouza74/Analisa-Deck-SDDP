@@ -138,7 +138,7 @@ Atualizado em 15/11/2026.
 
 | Etapa | .bat | Script | O que faz |
 |---|---|---|---|
-| 1 | `rodar_agregacao.bat` | `agrega_saidas_uf.py` | Lê gergnd, vergnd, businj (ou bus_inj), bus_losses (.hdr/.bin) e soma por UF: `<var>_uf_horario.csv` (formato SDDP), `_uf_mensal.csv`, `_agente_mensal.csv`, `checagem.txt` |
+| 1 | `rodar_agregacao.bat` | `agrega_saidas_uf.py` | Lê gergnd, vergnd (vertimento **sem GD MMGD/OMGD**; a geração gergnd inclui a GD), businj (ou bus_inj), bus_losses (.hdr/.bin) e soma por UF: `<var>_uf_horario.csv` (formato SDDP), `_uf_mensal.csv`, `_agente_mensal.csv`, `checagem.txt` |
 | 2 | `rodar_limites.bat` | `limites_uf.py` | Capacidade dos circuitos de divisa por UF (CA, trafos, elos CC) e restrições de intercâmbio: `limites_uf.csv`, `limites_pares_uf.csv`, `circuitos_fronteira_uf.csv`, `restricoes_intercambio.csv` |
 | 3 | `rodar_graficos.bat` | `graficos_uf.py` | Box plots por hora (geração, vertimento, injeção) com linhas de limite de exportação/importação, painel dos 27 estados, mapas de calor mês×hora, injeção×vertimento, ranking, vertimento por tecnologia e UF da usina×UF da barra |
 | 4 | `rodar_analise_semana.bat` | `analise_semana_carga.py` | Dias úteis × fins de semana (2 dias de menor carga por semana): gráficos diários mês a mês e perfil horário médio mensal com carga no eixo secundário, resumo, correlações, carga líquida×vertimento |

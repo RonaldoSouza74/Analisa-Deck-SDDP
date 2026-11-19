@@ -41,7 +41,7 @@ from graficos_uf import ler_horario, ORDEM_UF, REGIAO_DA_UF, MESES, TEXTO, TEXTO
 COR_UTIL, COR_FDS = '#2a78d6', '#eb6834'
 ANO = 2030          # ano analisado (definido em main pelo --ano)
 DIAS_MES = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-VAR_INFO = {'vergnd': ('Vertimento renovável', 'GWh/dia'),
+VAR_INFO = {'vergnd': ('Vertimento renovável (sem GD)', 'GWh/dia'),
             'gergnd': ('Geração renovável', 'GWh/dia'),
             'businj': ('Injeção líquida (positivo = exporta)', 'MW médio')}
 
@@ -362,7 +362,7 @@ def grafico_resumo(saidas, ufs, semanas, C, saida):
     ax.set_axisbelow(True)
     ax.set_xlabel('GW')
     ax.set_title('Carga média do SIN (entrada do SDDP)', loc='left', fontsize=10)
-    fig.suptitle(f'Vertimento em dias úteis × fins de semana (2 dias de menor carga de cada semana), {ANO}',
+    fig.suptitle(f'Vertimento (sem GD) em dias úteis × fins de semana (2 dias de menor carga de cada semana), {ANO}',
                  x=0.01, ha='left', fontsize=13, fontweight='bold')
     fig.subplots_adjust(left=0.05, right=0.98, top=0.9, bottom=0.08, wspace=0.18)
     fig.savefig(os.path.join(saida, 'resumo_util_fds.png'), dpi=130)
@@ -450,7 +450,7 @@ def correlacoes(saidas, ufs, C, saida):
         ax.set_axisbelow(True)
         ax.set_xlabel('Carga líquida do SIN (GW)')
         ax.set_ylabel('Vertimento (GW)')
-    fig.suptitle(f'Vertimento × carga líquida do SIN, hora a hora ({ANO}, {ncen} cenários)', x=0.01, ha='left',
+    fig.suptitle(f'Vertimento (sem GD) × carga líquida do SIN, hora a hora ({ANO}, {ncen} cenários)', x=0.01, ha='left',
                  fontsize=13, fontweight='bold')
     fig.text(0.01, 0.005, 'Carga líquida = carga do SIN − renovável disponível no Brasil (geração + vertimento). '
              'Cor = quantidade de horas (escala log).', fontsize=8, color=TEXTO2)
