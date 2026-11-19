@@ -16,6 +16,9 @@ Gera, na pasta de saída:
                                estado (precisa de businj e vergnd)
   vertimento_tecnologia.png    vertimento por estado e tecnologia, sem a geração
                                distribuída MMGD/OMGD (precisa de vergnd_agente_mensal.csv)
+  ranking_subsistemas.png, mapa_calor_vergnd_subsistemas.png, injecao_x_vertimento_subsistemas.png,
+  vertimento_tecnologia_subsistemas.png   os mesmos gráficos por subsistema (precisam dos
+                               <var>_subsistema_horario.csv da etapa 1)
   vertimento_uf_usina_x_barra.png  vertimento pela UF da barra de conexão x UF
                                do nome da usina (precisa de vergnd_agente_mensal.csv
                                e usinas_renovaveis_uf.csv)
@@ -82,6 +85,32 @@ def rotulo_estagio(d, e):
 
 
 MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+
+# grupo de agregação dos gráficos: estados (padrão) ou subsistemas
+GRUPO_UF = dict(rot='estado', plural='estados', sufixo='estados', ordem=None, nome=lambda u: u)
+
+
+def grupo_subsistemas(caso):
+    """Configuração dos gráficos por subsistema (ordem e nomes do sistem.dat do caso, se houver)."""
+    nomes, ordem = {}, []
+    arq = os.path.join(caso, 'sistem.dat') if caso else ''
+    if arq and os.path.exists(arq):
+        with open(arq, encoding='latin-1') as f:
+            lista = []
+            for ln in f:
+                p = ln.split()
+                if len(p) >= 4 and p[0].isdigit():
+                    lista.append((int(p[0]), p[-2].upper(), ' '.join(p[1:-2])))
+        ordem = [x[1] for x in sorted(lista)]
+        nomes = {x[1]: x[2] for x in lista}
+    return dict(rot='subsistema', plural='subsistemas', sufixo='subsistemas', ordem=ordem,
+                nome=lambda u: f'{u} ({nomes[u]})' if u in nomes else u)
+
+
+def _ordem(G, cols):
+    if G['ordem'] is None:
+        return [u for u in ORDEM_UF if u in cols]
+    return [u for u in G['ordem'] if u in cols] + [u for u in cols if u not in G['ordem'] and u != '??']
 
 
 def hora_do_dia(d):
@@ -200,11 +229,11 @@ def figura_estado(u, dados, saida, limites=None):
     plt.close(fig)
 
 
-def ranking(dados, saida):
+def ranking(dados, saida, G=GRUPO_UF):
     if 'vergnd' not in dados:
         return None
     v = dados['vergnd']
-    ver = {u: energia_media_anual(v, i) for i, u in enumerate(v['ufs'])}
+    ver = {u: energia_media_anual(v, i) for i, u in enumerate(v['ufs']) if u != '??'}
     ufs = sorted([u for u in ver if ver[u] > 0], key=lambda u: ver[u])
     g = dados.get('gergnd')
     n = 2 if g else 1
@@ -227,10 +256,10 @@ def ranking(dados, saida):
         ax.set_yticks(list(y), ufs)
         ax.set_title('Vertimento / (geração + vertimento), %', loc='left', fontsize=10)
         ax.grid(axis='x', color=GRADE, linewidth=0.6); ax.set_axisbelow(True)
-    fig.suptitle(f'Vertimento renovável por estado — {periodo(v)}', x=0.01, ha='left',
+    fig.suptitle(f'Vertimento renovável por {G["rot"]} — {periodo(v)}', x=0.01, ha='left',
                  fontsize=13, fontweight='bold')
     fig.tight_layout(rect=(0, 0, 1, 0.95))
-    nome = os.path.join(saida, 'ranking_estados.png')
+    nome = os.path.join(saida, f'ranking_{G["sufixo"]}.png')
     fig.savefig(nome, dpi=130)
     plt.close(fig)
     return nome
@@ -261,13 +290,14 @@ def matriz_mes_hora(d, i_uf):
     return est, M
 
 
-def mapa_calor(var, d, saida):
+def mapa_calor(var, d, saida, G=GRUPO_UF):
     info = VARS[var]
     div = var.startswith('bus')
     cmap = _cmap_divergente() if div else _cmap_sequencial(info['cor'])
-    fig, axs = plt.subplots(7, 4, figsize=(16, 24))
+    ufs = _ordem(G, d['ufs'])
+    n_lin = max(int(np.ceil(len(ufs) / 4)), 1)
+    fig, axs = plt.subplots(n_lin, 4, figsize=(16, 24 * n_lin / 7), squeeze=False)
     axs = axs.ravel()
-    ufs = [u for u in ORDEM_UF if u in d['ufs']]
     for k, u in enumerate(ufs):
         ax = axs[k]
         est, M = matriz_mes_hora(d, d['ufs'].index(u))
@@ -281,8 +311,8 @@ def mapa_calor(var, d, saida):
         ax.set_xticks(range(0, 24, 2), [str(h) for h in range(1, 25, 2)], fontsize=7)
         for sp in ax.spines.values():
             sp.set_visible(False)
-        ax.set_title(f'{u}  ·  máx. {M.max():,.0f} MW'.replace(',', '.') if not div else
-                     f'{u}  ·  {M.min():,.0f} a {M.max():,.0f} MW'.replace(',', '.'),
+        ax.set_title(f'{G["nome"](u)}  ·  ' + (f'máx. {M.max():,.0f} MW'.replace(',', '.') if not div else
+                                               f'{M.min():,.0f} a {M.max():,.0f} MW'.replace(',', '.')),
                      loc='left', fontsize=10, fontweight='bold')
         cb = fig.colorbar(im, ax=ax, fraction=0.05, pad=0.02)
         cb.ax.tick_params(labelsize=7)
@@ -293,9 +323,9 @@ def mapa_calor(var, d, saida):
     fig.suptitle(f'{info["titulo"]}: média por mês e hora do dia, MW{extra} — {periodo(d)}',
                  x=0.01, ha='left', fontsize=14, fontweight='bold')
     fig.text(0.01, 0.005, 'Cada célula = média de todos os dias do mês e de todos os cenários. '
-             'Hora 1 = 00h-01h. Cada estado tem sua própria escala de cor.', fontsize=8, color=TEXTO2)
-    fig.tight_layout(rect=(0, 0.01, 1, 0.98))
-    nome = os.path.join(saida, f'mapa_calor_{var}_estados.png')
+             f'Hora 1 = 00h-01h. Cada {G["rot"]} tem sua própria escala de cor.', fontsize=8, color=TEXTO2)
+    fig.tight_layout(rect=(0, 0.01, 1, 1 - 0.45 / fig.get_figheight()))
+    nome = os.path.join(saida, f'mapa_calor_{var}_{G["sufixo"]}.png')
     fig.savefig(nome, dpi=130)
     plt.close(fig)
     return nome
@@ -304,7 +334,7 @@ def mapa_calor(var, d, saida):
 # ----------------------------------------------------------------------------
 # Injeção líquida x vertimento
 # ----------------------------------------------------------------------------
-def injecao_x_vertimento(dados, saida, n_estados=12):
+def injecao_x_vertimento(dados, saida, n_estados=12, G=GRUPO_UF):
     b = dados.get('businj') or dados.get('bus_inj')
     v = dados.get('vergnd')
     if b is None or v is None:
@@ -313,7 +343,7 @@ def injecao_x_vertimento(dados, saida, n_estados=12):
             and np.array_equal(b['cenario'], v['cenario'])):
         print('AVISO: businj e vergnd com horas diferentes; gráfico injeção x vertimento não gerado')
         return None
-    tot = {u: v['valores'][:, i].sum() for i, u in enumerate(v['ufs'])}
+    tot = {u: v['valores'][:, i].sum() for i, u in enumerate(v['ufs']) if u != '??'}
     ufs = sorted([u for u in tot if tot[u] > 0 and u in b['ufs']], key=lambda u: -tot[u])[:n_estados]
     lin = int(np.ceil(len(ufs) / 4))
     fig, axs = plt.subplots(lin, 4, figsize=(16, 4.2 * lin), squeeze=False)
@@ -341,9 +371,9 @@ def injecao_x_vertimento(dados, saida, n_estados=12):
         frac = 100 * y[x >= p90].sum() / max(y.sum(), 1e-9)
         corr = np.corrcoef(x, y)[0, 1] if y.std() > 0 and x.std() > 0 else float('nan')
         linhas_tab.append((u, frac, corr))
-        ax.set_title(f'{u}  ·  {frac:.0f}% do vertim. no top 10% de injeção  ·  r = {corr:.2f}'.replace('.', ','),
+        ax.set_title(f'{u}  ·  ' + f'{frac:.0f}% do vertim. no top 10% de injeção  ·  r = {corr:.2f}'.replace('.', ','),
                      loc='left', fontsize=9.5, fontweight='bold')
-        ax.set_xlabel('Injeção líquida do estado (MW)  →  exporta')
+        ax.set_xlabel(f'Injeção líquida do {G["rot"]} (MW)  →  exporta')
         ax.set_ylabel('Vertimento (MW)')
         ax.grid(color=GRADE, linewidth=0.6)
         ax.set_axisbelow(True)
@@ -351,17 +381,19 @@ def injecao_x_vertimento(dados, saida, n_estados=12):
             ax.legend(loc='upper left', fontsize=8, frameon=False)
     for ax in axs[len(ufs):]:
         ax.axis('off')
-    fig.suptitle(f'Vertimento × injeção líquida, hora a hora — {len(ufs)} estados com mais vertimento, {periodo(v)}',
+    fig.suptitle(f'Vertimento × injeção líquida, hora a hora — {len(ufs)} {G["plural"]} com mais vertimento, {periodo(v)}',
                  x=0.01, ha='left', fontsize=14, fontweight='bold')
     fig.text(0.01, 0.005, 'Cor = quantidade de horas (escala log). Linha laranja = vertimento médio por faixa de '
              'injeção. Linha pontilhada = injeção no percentil 95. Vertimento crescendo junto com a injeção até '
              'uma "parede" vertical indica limite de exportação (transmissão).', fontsize=8, color=TEXTO2)
     fig.tight_layout(rect=(0, 0.015, 1, 0.97))
-    nome = os.path.join(saida, 'injecao_x_vertimento.png')
+    suf = '' if G['rot'] == 'estado' else f'_{G["sufixo"]}'
+    nome = os.path.join(saida, f'injecao_x_vertimento{suf}.png')
     fig.savefig(nome, dpi=130)
     plt.close(fig)
-    with open(os.path.join(saida, 'injecao_x_vertimento.csv'), 'w', encoding='utf-8-sig') as f:
-        f.write('uf,pct_vertimento_com_injecao_no_top10pct,correlacao_injecao_vertimento\n')
+    with open(os.path.join(saida, f'injecao_x_vertimento{suf}.csv'), 'w', encoding='utf-8-sig') as f:
+        f.write(('uf' if G['rot'] == 'estado' else 'subsistema') +
+                ',pct_vertimento_com_injecao_no_top10pct,correlacao_injecao_vertimento\n')
         for u, fr, c in linhas_tab:
             f.write(f'{u},{fr:.1f},{c:.3f}\n')
     return nome
@@ -389,11 +421,16 @@ def ler_agente(caminho):
     return [dict(zip(cab, r), total=t) for r, t in zip(linhas[1:], tot)], cab[-1]
 
 
-def vertimento_tecnologia(pasta, saida):
+def vertimento_tecnologia(pasta, saida, G=GRUPO_UF, sub_usina=None):
+    """sub_usina: nome da usina -> subsistema (só para G = subsistemas)."""
     arq = os.path.join(pasta, 'vergnd_agente_mensal.csv')
     if not os.path.exists(arq):
         return None
     usinas, col = ler_agente(arq)
+    if G['rot'] != 'estado':
+        for u in usinas:
+            u['uf'] = (sub_usina or {}).get(str(next(iter(u.values()), '')).strip(), '??')
+        usinas = [u for u in usinas if u['uf'] != '??']
     fator = 1 / 1000 if col.startswith('total_MWh') else 1  # MWh -> GWh
     soma = {}
     for u in usinas:
@@ -425,20 +462,43 @@ def vertimento_tecnologia(pasta, saida):
             ax.set_title('Vertimento no período (GWh, média dos cenários)', loc='left', fontsize=10)
         else:
             ax.set_xlim(0, 100)
-            ax.set_title('Participação de cada tecnologia no vertimento do estado (%)', loc='left', fontsize=10)
+            ax.set_title(f'Participação de cada tecnologia no vertimento do {G["rot"]} (%)', loc='left', fontsize=10)
     axs[0].legend(loc='lower right', fontsize=8, frameon=False)
-    fig.suptitle('Vertimento renovável por estado e tecnologia, sem a geração distribuída (UF da barra de conexão)',
+    onde = 'UF da barra de conexão' if G['rot'] == 'estado' else 'subsistema da barra de conexão'
+    fig.suptitle(f'Vertimento renovável por {G["rot"]} e tecnologia, sem a geração distribuída ({onde})',
                  x=0.01, ha='left',
                  fontsize=13, fontweight='bold')
     fig.tight_layout(rect=(0, 0, 1, 0.95))
-    nome = os.path.join(saida, 'vertimento_tecnologia.png')
+    suf = '' if G['rot'] == 'estado' else f'_{G["sufixo"]}'
+    nome = os.path.join(saida, f'vertimento_tecnologia{suf}.png')
     fig.savefig(nome, dpi=130)
     plt.close(fig)
-    with open(os.path.join(saida, 'vertimento_tecnologia.csv'), 'w', encoding='utf-8-sig') as f:
-        f.write('uf,' + ','.join(tecs) + ',total_GWh\n')
+    with open(os.path.join(saida, f'vertimento_tecnologia{suf}.csv'), 'w', encoding='utf-8-sig') as f:
+        f.write(('uf,' if G['rot'] == 'estado' else 'subsistema,') + ','.join(tecs) + ',total_GWh\n')
         for uf in reversed(ufs):
             f.write(uf + ',' + ','.join(f'{soma[uf].get(t, 0):.1f}' for t in tecs) + f',{tot[uf]:.1f}\n')
     return nome
+
+
+def mapa_usina_subsistema(tabelas, caso):
+    """Usina renovável -> subsistema da barra de conexão (usinas_renovaveis_uf.csv + barras_uf.csv)."""
+    import csv
+    arq_u, arq_b = os.path.join(tabelas, 'usinas_renovaveis_uf.csv'), os.path.join(tabelas, 'barras_uf.csv')
+    if not (os.path.exists(arq_u) and os.path.exists(arq_b)):
+        return None
+    sigla = {}
+    arq_s = os.path.join(caso, 'sistem.dat')
+    if os.path.exists(arq_s):
+        with open(arq_s, encoding='latin-1') as f:
+            for ln in f:
+                p = ln.split()
+                if len(p) >= 4 and p[0].isdigit():
+                    sigla[' '.join(p[1:-2]).upper()] = p[-2].upper()
+    with open(arq_b, encoding='utf-8-sig', newline='') as f:
+        sub = {r['codigo']: sigla.get(r['subsistema'].upper(), r['subsistema'][:2].upper())
+               for r in csv.DictReader(f) if r.get('rede', 'CA') == 'CA' and r.get('subsistema')}
+    with open(arq_u, encoding='utf-8-sig', newline='') as f:
+        return {r['nome_usina']: sub[r['barra']] for r in csv.DictReader(f) if r.get('barra') in sub}
 
 
 def vertimento_uf_usina_x_barra(pasta, saida, tabelas):
@@ -562,6 +622,31 @@ def main():
     print('Vertimento por tecnologia:', r or 'vergnd_agente_mensal.csv não encontrado, gráfico não gerado')
     r = vertimento_uf_usina_x_barra(a.pasta, saida, a.tabelas)
     print('UF da usina x UF da barra:', r or 'vergnd_agente_mensal.csv ou usinas_renovaveis_uf.csv não encontrado')
+
+    # --- os mesmos 4 gráficos por subsistema (ranking, mapa de calor do vertimento, injeção x vertimento,
+    # tecnologia), a partir dos <var>_subsistema_horario.csv da etapa 1
+    caso = os.path.dirname(os.path.normpath(a.pasta))
+    G = grupo_subsistemas(caso)
+    dados_s = {}
+    for v in ('vergnd', 'gergnd', 'businj', 'bus_inj'):
+        arq = os.path.join(a.pasta, f'{v}_subsistema_horario.csv')
+        if os.path.exists(arq):
+            d = ler_horario(arq)
+            if a.estagios:
+                m = (d['estagio'] >= a.estagios[0]) & (d['estagio'] <= a.estagios[1])
+                d = {k: (x[m] if isinstance(x, np.ndarray) else x) for k, x in d.items()}
+            dados_s[v] = d
+    if 'vergnd' not in dados_s:
+        print('Gráficos por subsistema: não gerados (falta vergnd_subsistema_horario.csv; refaça a etapa 1)')
+    else:
+        print('Ranking por subsistema:', ranking(dados_s, saida, G))
+        print('Mapa de calor por subsistema:', mapa_calor('vergnd', dados_s['vergnd'], saida, G))
+        r = injecao_x_vertimento(dados_s, saida, G=G)
+        if r:
+            print('Injeção x vertimento por subsistema:', r)
+    sub_usina = mapa_usina_subsistema(a.tabelas, caso)
+    r = vertimento_tecnologia(a.pasta, saida, G, sub_usina) if sub_usina else None
+    print('Vertimento por tecnologia e subsistema:', r or 'não gerado (faltam vergnd_agente_mensal.csv ou as tabelas)')
     print('Fim. Gráficos em', saida)
 
 

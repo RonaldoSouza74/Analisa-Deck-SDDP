@@ -57,6 +57,11 @@ ETAPAS SEPARADAS (se quiser rodar só uma)
      mapa_calor_<var>_estados.png   média por mês x hora
      injecao_x_vertimento.png       vertimento x injeção, hora a hora
      ranking_estados.png            vertimento por estado (GWh e %)
+     ranking_subsistemas.png, vertimento_tecnologia_subsistemas.png,
+     mapa_calor_vergnd_subsistemas.png, injecao_x_vertimento_subsistemas.png
+                                    os mesmos gráficos (ranking, tecnologia, mapa de calor do
+                                    vertimento, injeção x vertimento) por SUBSISTEMA; usam os
+                                    <var>_subsistema_horario.csv da etapa 1 e o sistem.dat
      vertimento_tecnologia.png e vertimento_uf_usina_x_barra.png
                                     (precisam do vergnd_agente_mensal.csv na pasta); o de
                                     tecnologia é sem a geração distribuída (MMGD/OMGD)
@@ -274,7 +279,8 @@ APRESENTAÇÃO: rodar_apresentacao.bat  -> apresentacao.py
 APRESENTAÇÃO DETALHADA: rodar_apresentacao_detalhada.bat  -> apresentacao_detalhada.py
    Rode depois do rodar_tudo.bat. Monta
      resultados_uf\apresentacao\apresentacao_detalhada_<ano>.pptx
-   só com o balanço, a situação de cada hora do dia e os gráficos de circuitos (no limite,
+   só com ranking, tecnologia, mapa de calor e injeção x vertimento (estados e subsistemas),
+   o balanço, a situação de cada hora do dia e os gráficos de circuitos (no limite,
    com mais vertimento coincidente e não monitorados acima de 100%), na ordem: Brasil ->
    cada subsistema -> cada estado (do maior para o menor vertimento). Cada slide tem à
    direita um quadro "Como ler" e, nas anotações do apresentador, a explicação completa.

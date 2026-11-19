@@ -2,6 +2,8 @@
 Brasil, cada subsistema e cada estado, com explicações em cada slide.
 
 Usa só os gráficos:
+  graficos\\ranking_*.png, vertimento_tecnologia*.png, mapa_calor_vergnd_*.png, injecao_x_vertimento*.png
+  (por estado e por subsistema)
   balanco_uf\\balanco_<UF>.png, balanco_subsistema\\balanco_<ID>.png (+ balanco_resumo.png)
   relacao_gargalo\\ocorrencias_estados.png, gargalo_subsistema\\ocorrencias_subsistemas.png
   gargalo_linhas\\circuitos_horas_no_limite*.png, circuitos_sobrecarga_nao_monitorados*.png,
@@ -64,6 +66,25 @@ LER = {
              '• É coincidência, não divisão: vários circuitos podem estar no limite na mesma hora.',
              '• Direita: % das horas de cada mês com o circuito no limite.'],
 }
+LER.update({
+    'ranking': ['Como ler',
+                '• Esquerda: vertimento renovável no período (GWh, média dos cenários).',
+                '• Direita: vertimento / (geração + vertimento): quanto da energia renovável disponível foi cortada.',
+                '• Ordenado do maior para o menor vertimento.'],
+    'tecnologia': ['Como ler',
+                   '• Esquerda: vertimento no período (GWh) por tecnologia.',
+                   '• Direita: participação de cada tecnologia no vertimento (%).',
+                   '• Local da usina = o da barra de conexão. Sem a geração distribuída.'],
+    'mapa': ['Como ler',
+             '• Linhas = meses; colunas = hora do dia (1 = 00h–01h).',
+             '• Cor = vertimento médio (MW) naquele mês e hora, média dos dias e cenários.',
+             '• Cada painel tem a sua escala de cor (ver o máximo no título).'],
+    'injecao': ['Como ler',
+                '• Cada ponto = uma hora de um cenário: injeção líquida (x, positivo = exporta) × vertimento (y).',
+                '• Cor = quantidade de horas (escala log). Linha laranja = vertimento médio por faixa de injeção.',
+                '• Vertimento subindo com a injeção até uma "parede" vertical indica limite de exportação.',
+                '• Pontilhado: injeção no percentil 95.'],
+})
 NOTAS = {
     'balanco': 'Balanço hora a hora: renovável gerada (gergnd) + hidrelétrica (gerhid) + termelétrica (gerter) − carga '
                '(demxba) = injeção líquida (businj). "Outros" é a diferença (baterias, déficit, arredondamentos). '
@@ -144,6 +165,16 @@ def main():
     D.imagem('Vertimento × geração hidrelétrica e termelétrica do subsistema nas mesmas horas',
              'balanco_subsistema/balanco_resumo.png',
              notas='Igual ao gráfico por estado, somando as barras de cada subsistema.')
+    gr = 'graficos'
+    for chave, base, rot in (('ranking', 'ranking', 'Vertimento renovável por {}'),
+                             ('tecnologia', 'vertimento_tecnologia', 'Vertimento renovável por {} e tecnologia'),
+                             ('mapa', 'mapa_calor_vergnd', 'Vertimento renovável: média por mês e hora do dia, por {}'),
+                             ('injecao', 'injecao_x_vertimento', 'Vertimento × injeção líquida, hora a hora, por {}')):
+        for grupo, suf in (('estado', '_estados' if chave in ('ranking', 'mapa') else ''),
+                           ('subsistema', '_subsistemas')):
+            D.imagem(rot.format(grupo), f'{gr}/{base}{suf}.png', lateral=LER[chave],
+                     notas='Gráfico da etapa 3, a partir dos arquivos horários por ' + grupo + ' da etapa 1 (vertimento '
+                           'sem a geração distribuída).')
     circuitos(gl, '', 'Brasil')
 
     # --- subsistemas ----------------------------------------------------------------------
