@@ -40,6 +40,7 @@ from gargalo_cmo import abrir, bloco, ler_tab                                   
 from graficos_uf import ORDEM_UF, REGIAO_DA_UF, MESES, TEXTO, TEXTO2, GRADE, FUNDO, plt, np  # noqa: E402
 
 COR_LIM, COR_SOBRE = '#e34948', '#eda100'
+FRAC_POUCO = 0.02    # horas com vertimento < 2% da maior hora do dia: CMO no momento do vertimento apagado
 
 
 def circuitos_do_ano(caso, ano):
@@ -165,15 +166,29 @@ def figura_estado(uf, linhas_perfil, top_m, top_n, pasta, a, NB, PASSO, horas):
             cap = float(lin[0].get(f'vizinho{k}_capacidade_divisa_MW') or 0)
             viz.append((k, v, f'{cap:,.0f}'.replace(',', '.')))
 
-    def linhas_cmo(ax, c_est, rot_est, c_sin, rot_sin, sufixo_viz):
-        ax.plot(horas, c_est, color=COR_EST, linewidth=2.6, marker='o', markersize=3.5, label=rot_est, zorder=5)
-        ax.plot(horas, c_sin, color=TEXTO, linewidth=2, linestyle='--', marker='o', markersize=3, label=rot_sin,
-                zorder=4)
+    def linhas_cmo(ax, c_est, rot_est, c_sin, rot_sin, sufixo_viz, ok=None):
+        """ok: horas com vertimento suficiente; as demais ficam apagadas (preço pouco representativo)."""
+        series = [(c_est, dict(color=COR_EST, linewidth=2.6, marker='o', markersize=3.5, label=rot_est, zorder=5)),
+                  (c_sin, dict(color=TEXTO, linewidth=2, linestyle='--', marker='o', markersize=3, label=rot_sin,
+                               zorder=4))]
         for i, (k, v, cap) in enumerate(viz):
-            ax.plot(horas, col(f'vizinho{k}_cmo{sufixo_viz}'), color=CORES_VIZ[i], linewidth=1.4, marker='s',
-                    markersize=2.5, label=f'{v}\n(divisa {cap} MW)', zorder=3)
+            series.append((col(f'vizinho{k}_cmo{sufixo_viz}'), dict(color=CORES_VIZ[i], linewidth=1.4, marker='s',
+                                                                    markersize=2.5, label=f'{v}\n(divisa {cap} MW)',
+                                                                    zorder=3)))
+        for y_, kw in series:
+            if ok is None or ok.all():
+                ax.plot(horas, y_, **kw)
+            else:
+                ax.plot(horas, y_, **dict(kw, label=None, alpha=0.22, markersize=2))
+                ax.plot(horas, np.where(ok, y_, np.nan), **kw)
         ax.set_ylabel('$/MWh')
-        ax.legend(**LEG)
+        if ok is not None and not ok.all():
+            h_, l_ = ax.get_legend_handles_labels()
+            h_.append(Line2D([], [], color=TEXTO2, alpha=0.3, linewidth=2, marker='o', markersize=2))
+            l_.append(f'horas com pouco vertimento\n(< {100 * FRAC_POUCO:.0f}% da maior hora):\npreço pouco representativo')
+            ax.legend(h_, l_, **LEG)
+        else:
+            ax.legend(**LEG)
     linhas_cmo(axs[2], col('cmo_estado'), f'{uf} (mediana de todas\nas barras do estado)', col('cmo_sin'),
                'SIN (mediana de todas\nas barras do país)', '')
     axs[2].set_title(f'CMO médio por hora ($/MWh) — todas as horas do ano: {uf}, SIN e os 3 estados com maior '
@@ -184,9 +199,11 @@ def figura_estado(uf, linhas_perfil, top_m, top_n, pasta, a, NB, PASSO, horas):
         ax.set_title(f'CMO no momento em que as {rot} do estado verteram ($/MWh, ponderado pelo MW vertido) — '
                      'azul abaixo do SIN = gargalo', loc='left', fontsize=10)
         if np.isfinite(cu).any():
+            vt = np.nan_to_num(col(f'vert_{f_}_gargalo_MW')) + np.nan_to_num(col(f'vert_{f_}_excesso_MW'))
+            ok = vt >= FRAC_POUCO * vt.max() if vt.max() > 0 else np.ones(24, bool)
             linhas_cmo(ax, cu, f'barras das {rot}\nque verteram', cs, 'SIN nesses\nmesmos momentos',
-                       f'_quando_{f_}_verteu')
-            ax.fill_between(horas, cu, cs, where=np.isfinite(cu) & np.isfinite(cs) & (cu < cs - a.tolerancia),
+                       f'_quando_{f_}_verteu', ok=ok)
+            ax.fill_between(horas, cu, cs, where=ok & np.isfinite(cu) & np.isfinite(cs) & (cu < cs - a.tolerancia),
                             color=COR_LIM, alpha=0.12, linewidth=0)
         else:
             ax.set_yticks([])
