@@ -596,8 +596,10 @@ def main():
                       (c_sin, dict(color=TEXTO, linewidth=2, linestyle='--', marker='o', markersize=3, label=rot_sin,
                                    zorder=4))]
             for cor_, est_, y_, rot_ in extra:
-                series.append((y_, dict(color=cor_, linewidth=1.4, linestyle=est_, marker='s', markersize=2.5,
-                                        label=rot_, zorder=3)))
+                # por cima e pontilhado: aparece mesmo quando coincide com o subsistema ou com o SIN
+                series.append((y_, dict(color=cor_, linewidth=2.2 if est_ == ':' else 1.4, linestyle=est_, marker='s',
+                                        markersize=4 if est_ == ':' else 2.5, label=rot_,
+                                        zorder=6 if est_ == ':' else 3)))
             for y_, kw in series:
                 if ok is None or ok.all():
                     ax.plot(horas, y_, **kw)
@@ -614,7 +616,7 @@ def main():
                 ax.legend(h_, l_, **LEG)
             else:
                 ax.legend(**LEG)
-        extra = [(CORES_VIZ[v_], '-', cmo_sub_h[o] / n_dia, f'{ids[o]} ({sis[o][1]})')
+        extra = [(CORES_VIZ[v_], ':', cmo_sub_h[o] / n_dia, f'{ids[o]} ({sis[o][1]})')
                  for v_, (o, q) in enumerate(viz[k])]
         linhas_cmo(axs[2], cmo_sub_h[k] / n_dia, f'{ids[k]} (mediana das\nbarras do subsistema)', cmo_sin_h / n_dia,
                    'SIN (mediana de todas\nas barras do país)', extra)

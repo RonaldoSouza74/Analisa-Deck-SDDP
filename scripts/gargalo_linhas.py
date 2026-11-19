@@ -172,9 +172,10 @@ def figura_estado(uf, linhas_perfil, top_m, top_n, pasta, a, NB, PASSO, horas):
                   (c_sin, dict(color=TEXTO, linewidth=2, linestyle='--', marker='o', markersize=3, label=rot_sin,
                                zorder=4))]
         for i, (k, v, cap) in enumerate(viz):
-            series.append((col(f'vizinho{k}_cmo{sufixo_viz}'), dict(color=CORES_VIZ[i], linewidth=1.4, marker='s',
-                                                                    markersize=2.5, label=f'{v}\n(divisa {cap} MW)',
-                                                                    zorder=3)))
+            # por cima e pontilhado: aparece mesmo quando coincide com o estado ou com o SIN
+            series.append((col(f'vizinho{k}_cmo{sufixo_viz}'), dict(color=CORES_VIZ[i], linewidth=2.2, linestyle=':',
+                                                                    marker='s', markersize=4,
+                                                                    label=f'{v}\n(divisa {cap} MW)', zorder=6)))
         for y_, kw in series:
             if ok is None or ok.all():
                 ax.plot(horas, y_, **kw)
