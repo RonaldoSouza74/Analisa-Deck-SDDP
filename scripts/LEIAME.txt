@@ -36,6 +36,8 @@ ETAPAS SEPARADAS (se quiser rodar só uma)
    distribuída (usinas MMGD/OMGD), que na operação real não é cortada; a geração (gergnd) inclui
    a GD. Gera em <caso>\resultados_uf:
      <var>_uf_horario.csv     mês x cenário x hora, uma coluna por estado (formato do SDDP)
+     <var>_subsistema_horario.csv  o mesmo, uma coluna por subsistema (usado no balanço por
+                              subsistema da etapa 10)
      <var>_uf_mensal.csv      mês x estado (x tecnologia), por cenário e média
      <var>_agente_mensal.csv  cada usina/barra x mês, média dos cenários
      checagem.txt             perfil da solar no 1º dia (tem que ser zero à noite)
@@ -133,6 +135,15 @@ ETAPAS SEPARADAS (se quiser rodar só uma)
      circuitos_vertimento.png                   circuitos com mais vertimento coincidente
      circuitos_horas_no_limite.png              circuitos mais tempo no limite
      circuitos_sobrecarga_nao_monitorados.png   circuitos não monitorados em sobrecarga
+                                                (Brasil: os --top 30 primeiros de cada lista)
+     circuitos_por_estado\<UF>_circuitos_*.png      os mesmos 3 gráficos com TODOS os
+     circuitos_por_subsistema\<ID>_circuitos_*.png  circuitos que têm uma ponta no estado
+                                                (ou no subsistema), sem corte
+   Todos esses gráficos têm 20 circuitos por figura: quando há mais, saem as partes
+   _2.png, _3.png... (o título diz "parte 1 de N"). À direita, o mapa de calor do % das
+   horas de cada mês está na MESMA ORDEM das barras da esquerda (nas versões anteriores
+   ele saía na ordem invertida: refaça a etapa 7). O circuitos_no_limite.csv traz também o
+   subsistema de cada ponta e do lado preso (sub_de, sub_para, sub_lado_preso).
      por_estado\estado_<UF>.png             GRÁFICO PRINCIPAL DE CADA ESTADO. Todos os painéis
                                                 com a hora do dia (1 = 00h-01h) no eixo x, alinhados,
                                                 e médias de todos os dias e cenários do ano:
@@ -173,21 +184,7 @@ ETAPAS SEPARADAS (se quiser rodar só uma)
    Tabela: relacao_por_hora.csv (n_horas = número de ocorrências).
    Opção: --circuitos N (quantas linhas/trafos por estado; padrão 4).
 
-9. rodar_balanco.bat  -> balanco_uf.py
-   Balanço de cada estado, hora a hora: renovável gerada + hidrelétrica + termelétrica - carga
-   = injeção líquida ("outros" = baterias, déficit e diferenças), junto com o vertimento por
-   gargalo e por excesso. Mostra o que estava gerando no estado quando houve corte.
-   Precisa na pasta do caso: gerhid, gerter e demxba (.hdr/.bin); chidro??, ctermi??,
-   hydrounit?? e thermunit??.dat do deck; e os resultados das etapas 1 e 6 em resultados_uf.
-   Saídas em resultados_uf\balanco_uf:
-     balanco_<UF>.png          média por hora do dia: geração por fonte empilhada (abaixo da linha
-                               preta da carga = consumido no estado; contorno roxo = exportado;
-                               hachurado no topo = vertido); o mesmo separado em horas com gargalo, só com
-                               excesso e sem vertimento; térmica, hidro e outros por situação
-     balanco_resumo.png        vertimento x geração hidro e térmica do estado nas mesmas horas
-     balanco_situacao_uf.csv   médias (MW) e energia (GWh) de cada parcela por estado e situação
-
-10. rodar_gargalo_subsistema.bat  -> gargalo_subsistema.py
+9. rodar_gargalo_subsistema.bat  -> gargalo_subsistema.py
    Mesma ideia da etapa 6, mas por SUBSISTEMA (os 14 do sistem.dat: SE, SU, NE, NO, IT, AR, MA,
    BM, TP, PA, TA, IV, IM, XI). CMO do subsistema = mediana do CMO de todas as barras CA do
    subsistema; CMO do SIN = mediana de todas as barras do país. Cada usina pertence ao
@@ -216,6 +213,9 @@ ETAPAS SEPARADAS (se quiser rodar só uma)
                                            carregamento (% do limite) do circuito monitorado MAIS
                                            CARREGADO de cada ligação, hora a hora (mediana e 95%),
                                            com o nome do circuito que mais vezes fica no limite
+     ocorrencias_subsistemas.png / .csv    em que situação cada hora do dia ocorreu em cada
+                                           subsistema (gargalo entre, só dentro, só excesso, sem
+                                           vertimento), como o ocorrencias_estados.png
      intercambios_subsistemas.png          por ligação: % das horas com CMO separado e com
                                            circuito monitorado de fronteira no limite, e o
                                            vertimento por gargalo coincidente
@@ -234,6 +234,25 @@ ETAPAS SEPARADAS (se quiser rodar só uma)
    Opções: --tolerancia 1 ($/MWh), --carregamento 99 (% do limite).
    Lê o cmgbus e o vergnd inteiros de novo: leva alguns minutos.
 
+10. rodar_balanco.bat  -> balanco_uf.py
+   Balanço de cada estado e de cada subsistema, hora a hora: renovável gerada + hidrelétrica + termelétrica - carga
+   = injeção líquida ("outros" = baterias, déficit e diferenças), junto com o vertimento por
+   gargalo e por excesso. Mostra o que estava gerando no estado quando houve corte.
+   Precisa na pasta do caso: gerhid, gerter e demxba (.hdr/.bin); chidro??, ctermi??,
+   hydrounit?? e thermunit??.dat do deck; e os resultados das etapas 1, 6 e 9 em resultados_uf.
+   Saídas em resultados_uf\balanco_uf:
+     balanco_<UF>.png          média por hora do dia: geração por fonte empilhada (abaixo da linha
+                               preta da carga = consumido no estado; contorno roxo = exportado;
+                               hachurado no topo = vertido); o mesmo separado em horas com gargalo, só com
+                               excesso e sem vertimento; térmica, hidro e outros por situação
+     balanco_resumo.png        vertimento x geração hidro e térmica do estado nas mesmas horas
+     balanco_situacao_uf.csv   médias (MW) e energia (GWh) de cada parcela por estado e situação
+   Saídas em resultados_uf\balanco_subsistema: o mesmo por subsistema (todas as barras do
+   subsistema): balanco_<ID>.png, balanco_resumo.png e balanco_situacao_subsistema.csv. No
+   hachurado do topo: vermelho = gargalo entre subsistemas, laranja = gargalo dentro do
+   subsistema, cinza = excesso. Precisa do <var>_subsistema_horario.csv da etapa 1 (refaça a
+   etapa 1 se ele não existir).
+
 APRESENTAÇÃO: rodar_apresentacao.bat  -> apresentacao.py
    Rode depois do rodar_tudo.bat. Monta o PowerPoint
      resultados_uf\apresentacao\apresentacao_vertimento_<ano>.pptx
@@ -251,6 +270,15 @@ APRESENTAÇÃO: rodar_apresentacao.bat  -> apresentacao.py
      pasta; ele serve só para desenhar o mapa.
    - Na primeira vez o .bat instala o pacote python-pptx (python -m pip install python-pptx).
    - Feche a apresentação no PowerPoint antes de rodar de novo.
+
+APRESENTAÇÃO DETALHADA: rodar_apresentacao_detalhada.bat  -> apresentacao_detalhada.py
+   Rode depois do rodar_tudo.bat. Monta
+     resultados_uf\apresentacao\apresentacao_detalhada_<ano>.pptx
+   só com o balanço, a situação de cada hora do dia e os gráficos de circuitos (no limite,
+   com mais vertimento coincidente e não monitorados acima de 100%), na ordem: Brasil ->
+   cada subsistema -> cada estado (do maior para o menor vertimento). Cada slide tem à
+   direita um quadro "Como ler" e, nas anotações do apresentador, a explicação completa.
+   Os balanços ocupam 2 slides cada; os gráficos de circuitos, 1 slide por parte de 20.
 
 barras_uf.py (sem .bat) refaz as tabelas barras_uf.csv / usinas_renovaveis_uf.csv a partir
 do deck, se a rede mudar:  python barras_uf.py "<pasta do caso>" "<pasta de saída>"

@@ -55,9 +55,9 @@ from graficos_uf import MESES, TEXTO, TEXTO2, GRADE, FUNDO, plt, np             
 
 CAUSAS = [('entre', 'gargalo entre subsistemas'), ('dentro', 'gargalo dentro do subsistema (rede interna)'),
           ('exc', 'excesso no sistema (falta de demanda)')]
-COR = {'entre': '#e34948', 'dentro': '#eda100', 'exc': '#8a8984'}
+COR = {'entre': '#e34948', 'dentro': '#eb6834', 'exc': '#8a8984'}
 FONTES = [('ren', 'renovável (sem GD)'), ('hid', 'hidrelétrico (vertimento turbinável)')]
-CORES_VIZ = ['#eb6834', '#1baf7a', '#6250d6']
+CORES_VIZ = ['#1baf7a', '#6250d6', '#e87ba4']
 COR_SUB = '#2a78d6'
 
 
@@ -288,6 +288,7 @@ def main():
     n_lim_circ = [np.zeros(len(par_cols[q])) for q in range(np_)]     # horas de cada circuito no limite
     n_max_circ = [np.zeros(len(par_cols[q])) for q in range(np_)]     # horas em que é o mais carregado
     horario = {k: [] for k, _ in CAUSAS}                           # (estágio, cenário, horas x subsistema) MW
+    oc = np.zeros((ns, 4, 24))          # ocorrências de cada hora do dia: entre / dentro / só excesso / sem
     cmo_hor = []
     n_horas = 0
 
@@ -332,6 +333,11 @@ def main():
                 w_sin[f_] += (Hd @ (ref[:, None] * Wv)).T
             for cz, _ in CAUSAS:
                 horario[cz].append((e, c, hor_c[cz]))
+            m_e = hor_c['entre'] > 1
+            m_d = ~m_e & (hor_c['dentro'] > 1)
+            m_x = ~m_e & ~m_d & (hor_c['exc'] > 1)
+            for k_o, M_o in enumerate((m_e, m_d, m_x, ~m_e & ~m_d & ~m_x)):
+                oc[:, k_o, :] += (Hd @ M_o).T
             if itc is not None and np_:
                 F = bloco(itc, e, c) * fator_itc
                 for q, (i, j) in enumerate(pares):
@@ -672,6 +678,54 @@ def main():
         fig.subplots_adjust(left=0.055, right=0.78, top=1 - 0.95 / fig.get_figheight(),
                             bottom=0.75 / fig.get_figheight(), hspace=0.5)
         fig.savefig(os.path.join(pasta, f'subsistema_{ids[k]}.png'), dpi=115)
+        plt.close(fig)
+
+    # 3b) em que situação cada hora do dia ocorreu, por subsistema (mesmo modelo do ocorrencias_estados.png)
+    COR_OC = [COR['entre'], COR['dentro'], COR['exc'], '#c9dcf3']
+    ROT_OC = ['com gargalo entre subsistemas', 'com gargalo só dentro do subsistema',
+              'só com vertimento por excesso (falta de demanda)', 'sem vertimento']
+    ks_oc = [k for k in range(ns) if len(cols_sub[k])]
+    with open(os.path.join(saida, 'ocorrencias_subsistemas.csv'), 'w', encoding='utf-8-sig', newline='') as f:
+        w = csv.writer(f)
+        w.writerow(['subsistema', 'hora', 'n_ocorrencias', 'pct_gargalo_entre', 'pct_gargalo_dentro', 'pct_so_excesso',
+                    'pct_sem_vertimento'])
+        for k in ks_oc:
+            for hh in range(24):
+                tot_o = oc[k, :, hh].sum()
+                w.writerow([ids[k], hh + 1, int(tot_o)] + [round(100 * oc[k, j, hh] / max(tot_o, 1), 2) for j in range(4)])
+    if ks_oc:
+        ncol = 4
+        nlin = int(np.ceil(len(ks_oc) / ncol))
+        fig, axs = plt.subplots(nlin, ncol, figsize=(16, 2.6 * nlin + 1.4), sharex=True, sharey=True, squeeze=False)
+        for q_, k in enumerate(ks_oc):
+            ax = axs.ravel()[q_]
+            pc = 100 * oc[k] / np.maximum(oc[k].sum(axis=0, keepdims=True), 1)
+            base = np.zeros(24)
+            for j in range(4):
+                ax.bar(horas, pc[j], bottom=base, color=COR_OC[j], width=0.85, edgecolor=FUNDO, linewidth=0.5)
+                base += pc[j]
+            pe = 100 * oc[k, 0].sum() / max(oc[k].sum(), 1)
+            pd_ = 100 * oc[k, 1].sum() / max(oc[k].sum(), 1)
+            ax.set_title(f'{ids[k]} {sis[k][1][:14]} · entre ' + f'{pe:.1f}% · dentro {pd_:.1f}%'.replace('.', ','),
+                         loc='left', fontsize=9, fontweight='bold')
+            ax.set_ylim(0, 100)
+            ax.set_xticks(horas, [str(h) if h % 4 == 1 else '' for h in horas], fontsize=7)
+            ax.grid(axis='y', color=GRADE, linewidth=0.6)
+            ax.set_axisbelow(True)
+        for ax in axs.ravel()[len(ks_oc):]:
+            ax.axis('off')
+        for ax in axs[:, 0]:
+            ax.set_ylabel('% das ocorrências')
+        fig.legend(handles=[Patch(color=c_, label=r_) for c_, r_ in zip(COR_OC, ROT_OC)], loc='upper left', ncol=4,
+                   fontsize=9, frameon=False, bbox_to_anchor=(0.005, 1 - 0.45 / fig.get_figheight()))
+        fig.suptitle(f'Em que situação cada hora do dia ocorreu, por subsistema, {a.ano}', x=0.01,
+                     y=1 - 0.12 / fig.get_figheight(), ha='left', fontsize=13, fontweight='bold')
+        fig.text(0.01, 0.004, f'Para cada hora do dia, as ocorrências são todos os dias × {n_cen} cenários; a barra mostra '
+                 'quanto % delas caiu em cada situação (números em ocorrencias_subsistemas.csv). Entre = CMO do subsistema '
+                 f'mais de {tol:g} \\$/MWh abaixo do SIN; dentro = barra da usina abaixo do subsistema.', fontsize=8,
+                 color=TEXTO2)
+        fig.tight_layout(rect=(0, 0.015, 1, 1 - 0.75 / fig.get_figheight()))
+        fig.savefig(os.path.join(saida, 'ocorrencias_subsistemas.png'), dpi=120)
         plt.close(fig)
 
     # 4) intercâmbios: % das horas com CMO separado e com circuito no limite, por par

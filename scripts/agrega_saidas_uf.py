@@ -5,6 +5,7 @@ pequenos, prontos para o Excel:
 
   <var>_uf_horario.csv        mês x cenário x hora, uma coluna por UF, no mesmo
                               formato dos CSV exportados pelo SDDP/Graf
+  <var>_subsistema_horario.csv  o mesmo, uma coluna por subsistema (sistem.dat)
   <var>_uf_mensal.csv         cenário (e média) x mês x UF [x tecnologia]
   <var>_agente_mensal.csv     cada usina/barra x mês, média dos cenários
 
@@ -125,6 +126,19 @@ def escrever_csv(caminho, cabecalho, linhas):
 # ----------------------------------------------------------------------------
 # Processamento de uma variável
 # ----------------------------------------------------------------------------
+def ids_subsistemas(caso):
+    """Nome do subsistema -> sigla (sistem.dat: SUDESTE -> SE ...), na ordem do número do subsistema."""
+    arq = os.path.join(caso, 'sistem.dat')
+    lista = []
+    if os.path.exists(arq):
+        with open(arq, encoding='latin-1') as f:
+            for ln in f:
+                p = ln.split()
+                if len(p) >= 4 and p[0].isdigit():
+                    lista.append((int(p[0]), ' '.join(p[1:-2]).upper(), p[-2].upper()))
+    return {nome: sigla for _, nome, sigla in sorted(lista)}, [sigla for _, _, sigla in sorted(lista)]
+
+
 def processar(var, caso, saida, usinas, barras, uf_usina, estagios=None):
     hdr = ler_hdr(os.path.join(caso, var + '.hdr'))
     arq_bin = os.path.join(caso, var + '.bin')
@@ -172,6 +186,22 @@ def processar(var, caso, saida, usinas, barras, uf_usina, estagios=None):
     for i, u in enumerate(uf_ag):
         if usar[i]:
             M_uf[i, ufs.index(u)] = 1
+    # subsistema de cada agente (pela barra), para o arquivo horário por subsistema
+    nome_sigla, ordem_sub = ids_subsistemas(caso)
+    sub_nome = {}
+    for b_ in barras:
+        if b_.get('rede', 'CA') == 'CA':
+            sub_nome[b_['nome']] = sub_nome[b_['codigo']] = b_.get('subsistema', '').upper()
+    if var in ('gergnd', 'vergnd'):
+        sub_ag = [sub_nome.get(tab[n]['barra'], '') if n in tab else '' for n in nomes]
+    else:
+        sub_ag = [sub_nome.get(n, '') for n in nomes]
+    sub_ag = [nome_sigla.get(x, x[:2]) if x else '??' for x in sub_ag]
+    subs = [x for x in ordem_sub if x in set(sub_ag)] + sorted(set(sub_ag) - set(ordem_sub))
+    M_sub = np.zeros((n_ag, len(subs)))
+    for i, x in enumerate(sub_ag):
+        if usar[i]:
+            M_sub[i, subs.index(x)] = 1
     if tec_ag:
         grupos = sorted({g for g, ok in zip(zip(uf_ag, tec_ag), usar) if ok})
         M_grp = np.zeros((n_ag, len(grupos)))
@@ -205,6 +235,15 @@ def processar(var, caso, saida, usinas, barras, uf_usina, estagios=None):
     w_hora.writerow((['Varies per sequence?    ', 1 if hdr['varia_cenario'] else 0] + vazio)[:n_col])
     w_hora.writerow((['# of agents             ', len(ufs)] + vazio)[:n_col])
     w_hora.writerow(['Mês', 'Cenários', 'Hora'] + [u.ljust(12) for u in ufs])
+    f_sub = open(os.path.join(saida, f'{var}_subsistema_horario.csv'), 'w', encoding='latin-1', newline='')
+    w_sub = csv.writer(f_sub, delimiter=',', lineterminator='\r\n')
+    n_col_s = 3 + len(subs)
+    vazio_s = [''] * n_col_s
+    w_sub.writerow((['Varies per block?       ', 2, 'Unit    ', un_hora.ljust(7), hdr['tipo_estagio'],
+                     hdr['mes_ini'], hdr['ano_ini']] + vazio_s)[:n_col_s])
+    w_sub.writerow((['Varies per sequence?    ', 1 if hdr['varia_cenario'] else 0] + vazio_s)[:n_col_s])
+    w_sub.writerow((['# of agents             ', len(subs)] + vazio_s)[:n_col_s])
+    w_sub.writerow(['Mês', 'Cenários', 'Hora'] + [u.ljust(12) for u in subs])
 
     mensal = np.zeros((n_cen, n_est, len(grupos)))   # soma (energia) ou média (MW)
     agente = np.zeros((n_est, n_ag))                  # média dos cenários
@@ -217,14 +256,17 @@ def processar(var, caso, saida, usinas, barras, uf_usina, estagios=None):
         for c in range(n_cen):
             x = np.asarray(bloco[c], dtype=np.float64) * fator        # horas x agentes
             por_uf = x @ M_uf
+            por_sub = x @ M_sub
             for h in range(nh):
                 w_hora.writerow([e + 1, c + 1, h + 1] + [num(v) for v in por_uf[h]])
+                w_sub.writerow([e + 1, c + 1, h + 1] + [num(v) for v in por_sub[h]])
             red = x.sum(axis=0) if energia else x.mean(axis=0)        # por agente no mês
             mensal[c, e] = red @ M_grp
             agente[e] += red / n_cen
         dec = time.time() - inicio
         print(f'  [{var}] estágio {e + 1} de {ini} a {fim} ({MESES[mes - 1]}/{ano}) ok - {dec:.0f} s')
     f_hora.close()
+    f_sub.close()
 
     # --- mensal por UF (e tecnologia) ---------------------------------------
     medida = 'energia_MWh' if energia else f'media_{un_saida}'

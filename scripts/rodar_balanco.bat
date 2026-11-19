@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 > nul
-rem Balanco por estado nas horas de vertimento: renovavel + hidro + termica - carga = injecao.
-rem Precisa das etapas 1 (agregacao) e 6 (gargalo_cmo) ja rodadas para o mesmo caso.
+rem Balanco por estado e por subsistema nas horas de vertimento: renovavel + hidro + termica - carga = injecao.
+rem Precisa das etapas 1 (agregacao), 6 (gargalo_cmo) e 9 (gargalo_subsistema) ja rodadas para o mesmo caso.
 rem Deixe este arquivo na mesma pasta dos scripts .py e das tabelas .csv e de dois cliques nele.
 
 cd /d "%~dp0"

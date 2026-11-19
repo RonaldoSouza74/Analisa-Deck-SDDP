@@ -9,8 +9,8 @@ rem   5) identifica as barras com e sem margem de escoamento
 rem   6) separa o vertimento por gargalo de transmissao x excesso no sistema (custo marginal)
 rem   7) aponta as linhas e transformadores no limite (fluxos) e faz os graficos horarios por estado
 rem   8) relacao: vertimento x injecao x CMO x fluxo e limite fisico das linhas
-rem   9) balanco por estado nas horas de vertimento (renovavel + hidro + termica - carga)
-rem  10) vertimento por gargalo entre subsistemas x excesso (CMO dos 14 subsistemas e intercambio)
+rem   9) vertimento por gargalo entre subsistemas x excesso (CMO dos 14 subsistemas e intercambio)
+rem  10) balanco por estado e por subsistema nas horas de vertimento (renovavel + hidro + termica - carga)
 rem Deixe este arquivo na mesma pasta dos scripts .py e das tabelas .csv e de dois cliques nele.
 
 cd /d "%~dp0"
@@ -117,13 +117,13 @@ python com_log.py "%LOG%" relacao_gargalo.py "%CASO%" --ano %ANO%
 if errorlevel 1 goto erro
 
 echo.
-call :msg "===== [9/10] Balanco por estado nas horas de vertimento ====="
-python com_log.py "%LOG%" balanco_uf.py "%CASO%" --ano %ANO%
+call :msg "===== [9/10] Vertimento por gargalo entre subsistemas x excesso (CMO dos subsistemas) ====="
+python com_log.py "%LOG%" gargalo_subsistema.py "%CASO%" --ano %ANO%
 if errorlevel 1 goto erro
 
 echo.
-call :msg "===== [10/10] Vertimento por gargalo entre subsistemas x excesso (CMO dos subsistemas) ====="
-python com_log.py "%LOG%" gargalo_subsistema.py "%CASO%" --ano %ANO%
+call :msg "===== [10/10] Balanco por estado e por subsistema nas horas de vertimento ====="
+python com_log.py "%LOG%" balanco_uf.py "%CASO%" --ano %ANO%
 if errorlevel 1 goto erro
 
 >> "%LOG%" echo Concluido. Resultados em: %RES%
@@ -134,9 +134,10 @@ echo   graficos\          graficos por estado, mapas de calor, ranking
 echo   analise_semana\    dias uteis x fins de semana, correlacoes
 echo   margem_barras\     barras com e sem margem de escoamento
 echo   gargalo_cmo\       vertimento por gargalo de transmissao x excesso no sistema
-echo   gargalo_linhas\    linhas no limite e graficos horarios por estado
+echo   gargalo_linhas\    linhas no limite (Brasil, por estado e por subsistema) e graficos por estado
 echo   relacao_gargalo\   vertimento x injecao x CMO x linhas no limite, por situacao da hora
 echo   balanco_uf\        balanco por estado nas horas de vertimento
+echo   balanco_subsistema\ balanco por subsistema nas horas de vertimento
 echo   gargalo_subsistema\ vertimento por gargalo entre subsistemas x excesso, intercambios
 echo   limites_uf.csv     capacidade de exportacao/importacao por estado
 echo.

@@ -33,7 +33,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from agrega_saidas_uf import mes_ano                                            # noqa: E402
+from agrega_saidas_uf import mes_ano, ids_subsistemas                           # noqa: E402
 from limites_uf import ler, situacao, em_operacao, SEM_LIMITE                   # noqa: E402
 from limites_uf import num as numero                                            # noqa: E402
 from gargalo_cmo import abrir, bloco, ler_tab                                   # noqa: E402
@@ -391,6 +391,9 @@ def main():
     barras = [b for b in ler_tab(os.path.join(a.tabelas, 'barras_uf.csv')) if b['rede'] == 'CA']
     uf_cod = {int(b['codigo']): b['uf'] for b in barras}
     nome_cod = {int(b['codigo']): b['nome'] for b in barras}
+    nome_sigla, ordem_sub = ids_subsistemas(a.caso)
+    sub_cod = {int(b['codigo']): nome_sigla.get(b['subsistema'].upper(), b['subsistema'][:2].upper()) if b['subsistema']
+               else '??' for b in barras}
     col_cmg = {n: i for i, n in enumerate(cmg['nomes'])}
     circ = circuitos_do_ano(a.caso, a.ano)
 
@@ -416,7 +419,10 @@ def main():
         cpa = np.array([col_cmg.get(nome_cod.get(c['para'], ''), -1) if c else -1 for c in info])
         ufde = [uf_cod.get(c['de'], '??') if c else '??' for c in info]
         ufpa = [uf_cod.get(c['para'], '??') if c else '??' for c in info]
+        subde = [sub_cod.get(c['de'], '??') if c else '??' for c in info]
+        subpa = [sub_cod.get(c['para'], '??') if c else '??' for c in info]
         elems[tipo] = dict(h=h, info=info, lim=lim, mon=mon, cde=cde, cpa=cpa, ufde=ufde, ufpa=ufpa,
+                           subde=subde, subpa=subpa,
                            ide=np.array([iuf.get(u, iuf['??']) for u in ufde]),
                            ipa=np.array([iuf.get(u, iuf['??']) for u in ufpa]))
         print(f'  {h["nome"]}: {len(info)} {tipo}s, {np.isfinite(lim).sum()} com limite, '
@@ -496,8 +502,10 @@ def main():
             if hl == 0 and hs == 0:
                 continue
             lado = lista_uf[int(A['lado_baixo'][k].argmax())] if A['lado_baixo'][k].sum() else ''
+            sub_lado = (E['subde'][k] if lado == E['ufde'][k] else E['subpa'][k]) if lado else ''
             linhas.append(dict(tipo='linha' if tipo == 'linha' else 'transformador', nome=cinfo['nome'],
                                codigo=cinfo['codigo'], uf_de=E['ufde'][k], uf_para=E['ufpa'][k],
+                               sub_de=E['subde'][k], sub_para=E['subpa'][k], sub_lado_preso=sub_lado,
                                limite_MW=E['lim'][k], monitorado=int(E['mon'][k]),
                                pct_horas_no_limite=100 * hl / n_horas,
                                pct_horas_separando_precos=100 * A['h_sep'][k] / n_horas,
@@ -507,7 +515,7 @@ def main():
                                meses_sobre=[100 * A['h_sobre'][k][mm] / max(horas_mes[mm], 1) for mm in range(12)]))
     cab = ['tipo', 'nome', 'codigo', 'uf_de', 'uf_para', 'limite_MW', 'monitorado', 'pct_horas_no_limite',
            'pct_horas_separando_precos', 'pct_horas_sobrecarga', 'carregamento_max_pct', 'uf_lado_preso',
-           'vertimento_gargalo_coincidente_GWh']
+           'vertimento_gargalo_coincidente_GWh', 'sub_de', 'sub_para', 'sub_lado_preso']
     with open(os.path.join(saida, 'circuitos_no_limite.csv'), 'w', encoding='utf-8-sig', newline='') as f:
         w = csv.writer(f)
         w.writerow(cab + [f'pct_horas_no_limite_{MESES[mm]}' for mm in range(12)] +
@@ -527,64 +535,107 @@ def main():
             w.writerow([uf, nl, ns, hg, round(100 * uf_garg_com_linha.get(uf, 0) / hg, 1) if hg else ''])
 
     # --- gráficos -----------------------------------------------------------------------
-    def barras_top(sel, chave, titulo, rot_x, cor, arquivo, extra):
-        sel = sorted(sel, key=lambda l_: l_[chave], reverse=True)[:a.top]
-        if not sel:
-            return
-        sel = sel[::-1]
-        fig, axs = plt.subplots(1, 2, figsize=(17, 0.34 * len(sel) + 2.2), gridspec_kw=dict(width_ratios=[1, 1.25]))
-        y = np.arange(len(sel))
-        ax = axs[0]
-        ax.barh(y, [l_[chave] for l_ in sel], color=cor, height=0.7)
-        for k, l_ in enumerate(sel):
-            ax.text(l_[chave], k, '  ' + extra(l_), va='center', fontsize=7, color=TEXTO2)
-        ax.set_yticks(y, [f'{l_["nome"][:34]} ({l_["uf_de"]}-{l_["uf_para"]})' for l_ in sel], fontsize=7.5)
-        ax.set_xlabel(rot_x)
-        ax.grid(axis='x', color=GRADE, linewidth=0.6)
-        ax.set_axisbelow(True)
-        import textwrap
-        sub = titulo.split(' — ', 1)[1] if ' — ' in titulo else rot_x
-        ax.set_title('\n'.join(textwrap.wrap(sub[0].upper() + sub[1:], 70)), loc='left', fontsize=9.5)
-        ax = axs[1]
-        mk = 'meses' if 'sobre' not in arquivo else 'meses_sobre'
-        Mx = np.array([l_[mk] for l_ in sel])
-        from matplotlib.colors import LinearSegmentedColormap
-        cmap = LinearSegmentedColormap.from_list('seq', [FUNDO, cor, '#3a1010'])
-        im = ax.imshow(Mx, aspect='auto', cmap=cmap, vmin=0, vmax=max(Mx.max(), 1), interpolation='nearest')
-        for i in range(Mx.shape[0]):
-            for j in range(12):
-                if horas_mes[j] and Mx[i, j] >= 0.5:
-                    ax.text(j, i, f'{Mx[i, j]:.0f}', ha='center', va='center', fontsize=6.5,
-                            color=FUNDO if Mx[i, j] > 0.6 * Mx.max() else TEXTO)
-        ax.set_yticks([])
-        ax.set_xticks(range(12), MESES)
-        for sp in ax.spines.values():
-            sp.set_visible(False)
-        cb = fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02)
-        cb.outline.set_visible(False)
-        ax.set_title('% das horas de cada mês (média dos cenários)', loc='left', fontsize=10)
-        fig.suptitle(f'{titulo.split(" —")[0]}, {a.ano}', x=0.01, ha='left', fontsize=13, fontweight='bold')
-        fig.tight_layout(rect=(0, 0, 1, 1 - 0.5 / fig.get_figheight()))
-        fig.savefig(os.path.join(saida, arquivo), dpi=130)
-        plt.close(fig)
+    POR_PAGINA = 20
 
+    def barras_top(sel, chave, titulo, rot_x, cor, arquivo, extra, onde='', pasta=None, top=None, rotulo=None):
+        """Barras (valor do ano) + mapa de calor (% das horas de cada mês), 20 circuitos por figura.
+        top=None: todos os circuitos de sel. Devolve a lista de arquivos (arquivo.png, arquivo_2.png, ...)."""
+        from matplotlib.colors import LinearSegmentedColormap
+        import textwrap
+        sel = sorted(sel, key=lambda l_: l_[chave], reverse=True)
+        if top:
+            sel = sel[:top]
+        if not sel:
+            return []
+        rotulo = rotulo or (lambda l_: f'{l_["uf_de"]}-{l_["uf_para"]}')
+        mk = 'meses' if 'sobre' not in arquivo else 'meses_sobre'
+        vmax = max(max(max(l_[mk]) for l_ in sel), 1)
+        xmax = max(l_[chave] for l_ in sel)
+        cmap = LinearSegmentedColormap.from_list('seq', [FUNDO, cor, '#3a1010'])
+        paginas = [sel[i:i + POR_PAGINA] for i in range(0, len(sel), POR_PAGINA)]
+        base_arq, ext = os.path.splitext(arquivo)
+        saidas_ = []
+        for p_, pag in enumerate(paginas):
+            pag = pag[::-1]                   # o maior fica em cima (barh desenha de baixo para cima)
+            fig, axs = plt.subplots(1, 2, figsize=(17, 0.42 * len(pag) + 2.2), gridspec_kw=dict(width_ratios=[1, 1.25]))
+            y = np.arange(len(pag))
+            ax = axs[0]
+            ax.barh(y, [l_[chave] for l_ in pag], color=cor, height=0.7)
+            for k, l_ in enumerate(pag):
+                ax.text(l_[chave], k, '  ' + extra(l_), va='center', fontsize=8.5, color=TEXTO2)
+            ax.set_yticks(y, [f'{l_["nome"][:34]} ({rotulo(l_)})' for l_ in pag], fontsize=9)
+            ax.set_ylim(-0.5, len(pag) - 0.5)             # mesma escala vertical do mapa de calor ao lado
+            ax.set_xlim(0, xmax * 1.02)                   # mesma escala em todas as páginas
+            ax.set_xlabel(rot_x)
+            ax.grid(axis='x', color=GRADE, linewidth=0.6)
+            ax.set_axisbelow(True)
+            sub = titulo.split(' — ', 1)[1] if ' — ' in titulo else rot_x
+            ax.set_title('\n'.join(textwrap.wrap(sub[0].upper() + sub[1:], 70)), loc='left', fontsize=10)
+            ax = axs[1]
+            Mx = np.array([l_[mk] for l_ in pag])
+            # origin='lower': linha 0 embaixo, na mesma ordem das barras do painel da esquerda
+            im = ax.imshow(Mx, aspect='auto', cmap=cmap, vmin=0, vmax=vmax, interpolation='nearest', origin='lower')
+            for i in range(Mx.shape[0]):
+                for j in range(12):
+                    if horas_mes[j] and Mx[i, j] >= 0.5:
+                        ax.text(j, i, f'{Mx[i, j]:.0f}', ha='center', va='center', fontsize=8,
+                                color=FUNDO if Mx[i, j] > 0.6 * vmax else TEXTO)
+            ax.set_yticks([])
+            ax.set_xticks(range(12), MESES)
+            for sp in ax.spines.values():
+                sp.set_visible(False)
+            cb = fig.colorbar(im, ax=ax, fraction=0.03, pad=0.02)
+            cb.outline.set_visible(False)
+            ax.set_title('% das horas de cada mês (média dos cenários)', loc='left', fontsize=10)
+            parte = f' — parte {p_ + 1} de {len(paginas)}' if len(paginas) > 1 else ''
+            fig.suptitle(f'{titulo.split(" —")[0]}{onde}, {a.ano}{parte}', x=0.01, ha='left', fontsize=13,
+                         fontweight='bold')
+            fig.tight_layout(rect=(0, 0, 1, 1 - 0.5 / fig.get_figheight()))
+            destino = os.path.join(pasta or saida, f'{base_arq}{"" if p_ == 0 else f"_{p_ + 1}"}{ext}')
+            fig.savefig(destino, dpi=130)
+            plt.close(fig)
+            saidas_.append(destino)
+        return saidas_
+
+    fmt_lim = (lambda x: (f'{x:.1f}'.replace('.', ',') if x < 10 else f'{x:,.0f}'.replace(',', '.')))
     mon_lim = [l_ for l_ in linhas if l_['monitorado'] and l_['pct_horas_no_limite'] > 0]
-    barras_top([l_ for l_ in mon_lim if l_['vertimento_gargalo_coincidente_GWh'] > 0],
-               'vertimento_gargalo_coincidente_GWh',
-               'Circuitos monitorados no limite com mais vertimento por gargalo — vertimento do lado preso nas horas '
-               'em que o circuito estava no limite', 'GWh no ano (média dos cenários)', COR_LIM,
-               'circuitos_vertimento.png',
-               lambda l_: f'{l_["pct_horas_no_limite"]:.1f}% das horas no limite · lado preso: {l_["uf_lado_preso"]}'
-               .replace('.', ','))
-    barras_top(mon_lim, 'pct_horas_no_limite',
-               f'Circuitos monitorados mais tempo no limite (≥ {a.carregamento:g}% do limite)',
-               '% das horas do ano', COR_LIM, 'circuitos_horas_no_limite.png',
-               lambda l_: f'limite {l_["limite_MW"]:,.0f} MW · lado preso: {l_["uf_lado_preso"]}'.replace(',', '.'))
-    barras_top([l_ for l_ in linhas if not l_['monitorado'] and l_['pct_horas_sobrecarga'] > 0],
-               'pct_horas_sobrecarga',
-               'Circuitos NÃO monitorados acima de 100% do limite — gargalos que o SDDP não limita',
-               '% das horas do ano', COR_SOBRE, 'circuitos_sobrecarga_nao_monitorados.png',
-               lambda l_: f'máx. {l_["carregamento_max_pct"]:.0f}% · limite {l_["limite_MW"]:,.0f} MW'.replace(',', '.'))
+    sobre = [l_ for l_ in linhas if not l_['monitorado'] and l_['pct_horas_sobrecarga'] > 0]
+
+    def tres_graficos(m_sel, s_sel, onde='', pasta=None, prefixo='', top=-1, rotulo=None, lado='uf_lado_preso'):
+        k_ = dict(onde=onde, pasta=pasta, top=a.top if top == -1 else top, rotulo=rotulo)
+        barras_top([l_ for l_ in m_sel if l_['vertimento_gargalo_coincidente_GWh'] > 0],
+                   'vertimento_gargalo_coincidente_GWh',
+                   'Circuitos monitorados no limite com mais vertimento por gargalo — vertimento por gargalo do estado do '
+                   'lado preso nas horas em que o circuito estava no limite', 'GWh no ano (média dos cenários)', COR_LIM,
+                   f'{prefixo}circuitos_vertimento.png',
+                   lambda l_: (f'{l_["pct_horas_no_limite"]:.1f}% das horas no limite'.replace('.', ',') +
+                               f' · lado preso: {l_[lado]}'), **k_)
+        barras_top(m_sel, 'pct_horas_no_limite',
+                   f'Circuitos monitorados mais tempo no limite (≥ {a.carregamento:g}% do limite)',
+                   '% das horas do ano', COR_LIM, f'{prefixo}circuitos_horas_no_limite.png',
+                   lambda l_: f'limite {fmt_lim(l_["limite_MW"])} MW · lado preso: {l_[lado]}', **k_)
+        barras_top(s_sel, 'pct_horas_sobrecarga',
+                   'Circuitos NÃO monitorados acima de 100% do limite — gargalos que o SDDP não limita',
+                   '% das horas do ano', COR_SOBRE, f'{prefixo}circuitos_sobrecarga_nao_monitorados.png',
+                   lambda l_: f'máx. {l_["carregamento_max_pct"]:.0f}% · limite {fmt_lim(l_["limite_MW"])} MW', **k_)
+
+    tres_graficos(mon_lim, sobre)                                        # Brasil (os --top primeiros)
+    # por estado e por subsistema: TODOS os circuitos com uma ponta no estado/subsistema (20 por figura)
+    p_uf = os.path.join(saida, 'circuitos_por_estado')
+    p_sub = os.path.join(saida, 'circuitos_por_subsistema')
+    os.makedirs(p_uf, exist_ok=True)
+    os.makedirs(p_sub, exist_ok=True)
+    for uf in ORDEM_UF:
+        f_ = (lambda l_: uf in (l_['uf_de'], l_['uf_para']))
+        tres_graficos([l_ for l_ in mon_lim if f_(l_)], [l_ for l_ in sobre if f_(l_)], onde=f' — {uf}', pasta=p_uf,
+                      prefixo=f'{uf}_', top=None)
+    subs = [x for x in ordem_sub] + sorted({x for l_ in linhas for x in (l_['sub_de'], l_['sub_para'])}
+                                           - set(ordem_sub) - {'??'})
+    rot_sub = (lambda l_: f'{l_["sub_de"]}-{l_["sub_para"]}, {l_["uf_de"]}-{l_["uf_para"]}')
+    for sb in subs:
+        f_ = (lambda l_: sb in (l_['sub_de'], l_['sub_para']))
+        tres_graficos([l_ for l_ in mon_lim if f_(l_)], [l_ for l_ in sobre if f_(l_)], onde=f' — subsistema {sb}',
+                      pasta=p_sub, prefixo=f'{sb}_', top=None, rotulo=rot_sub, lado='sub_lado_preso')
 
     graficos_horarios(a, saida, estagios, n_cen, ref, elems, acc, linhas, NB, PASSO)
 

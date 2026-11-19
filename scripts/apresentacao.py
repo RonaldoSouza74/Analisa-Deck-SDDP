@@ -228,28 +228,31 @@ def grafico_tecnologia(N, saida, ano):
 # ----------------------------------------------------------------------------
 # slides
 # ----------------------------------------------------------------------------
-def partes_imagem(cam, pasta_tmp, alvo=0.62):
+def partes_imagem(cam, pasta_tmp, alvo=0.62, n_forcado=None):
     """Divide uma figura alta em partes de proporção ~alvo (altura/largura), cortando em faixas em branco
     entre os painéis. Devolve a lista de arquivos (a própria figura se não precisar dividir)."""
     from PIL import Image
     with Image.open(cam) as im:
         w, h = im.size
-        if h / w <= 0.95:
+        if not n_forcado and h / w <= 0.95:
             return [cam]
         g = np.asarray(im.convert('L'), dtype=np.int16)
-        n = int(np.ceil((h / w) / alvo))
-        n = max(2, min(n, 3))
+        n = n_forcado or max(2, min(int(np.ceil((h / w) / alvo)), 3))
         branca = (g.max(axis=1) - g.min(axis=1)) <= 3           # linha toda da mesma cor (sem desenho)
         cortes = [0]
         for k in range(1, n):
             ideal = int(h * k / n)
-            cand = np.nonzero(branca[max(cortes[-1] + 50, ideal - h // 6):min(h - 50, ideal + h // 6)])[0]
-            if len(cand):
-                base = max(cortes[-1] + 50, ideal - h // 6)
-                pos = base + cand
-                cortes.append(int(pos[np.argmin(np.abs(pos - ideal))]))
-            else:
-                cortes.append(ideal)
+            ini, fim = max(cortes[-1] + 50, ideal - h // 4), min(h - 50, ideal + h // 4)
+            # faixas contínuas em branco na janela; corta no meio da MAIS LARGA (espaço entre painéis)
+            faixas, j = [], ini
+            while j < fim:
+                if branca[j]:
+                    j0 = j
+                    while j < fim and branca[j]:
+                        j += 1
+                    faixas.append((j - j0, -abs((j0 + j) // 2 - ideal), (j0 + j) // 2))
+                j += 1
+            cortes.append(int(max(faixas)[2]) if faixas else ideal)
         cortes.append(h)
         os.makedirs(pasta_tmp, exist_ok=True)
         nome = os.path.splitext(os.path.basename(cam))[0]
@@ -302,13 +305,13 @@ class Deck:
             s.notes_slide.notes_text_frame.text = notas
         return s
 
-    def imagem(self, titulo, caminho_rel, notas=None, lateral=None, fonte=None):
+    def imagem(self, titulo, caminho_rel, notas=None, lateral=None, fonte=None, partes=None):
         """Slide com um gráfico. lateral = lista de frases mostradas à direita (para figuras altas)."""
         cam = caminho_rel if os.path.isabs(caminho_rel) else os.path.join(self.res, caminho_rel)
         if not os.path.exists(cam):
             self.faltando.append(caminho_rel)
             return False
-        partes = partes_imagem(cam, os.path.join(self.tmp, 'partes'))
+        partes = partes_imagem(cam, os.path.join(self.tmp, 'partes'), n_forcado=partes)
         for k, parte in enumerate(partes):
             tit = titulo if len(partes) == 1 else f'{titulo} ({k + 1}/{len(partes)})'
             self._slide_imagem(tit, parte, fonte or caminho_rel.replace('/', '\\'), notas, lateral)
