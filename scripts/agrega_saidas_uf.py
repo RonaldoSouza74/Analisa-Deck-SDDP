@@ -36,6 +36,7 @@ import os
 import re
 import struct
 import sys
+from _base import pasta_base  # noqa: E402
 import time
 
 try:
@@ -310,7 +311,7 @@ def processar(var, caso, saida, usinas, barras, uf_usina, estagios=None):
 def main():
     p = argparse.ArgumentParser(description='Agrega saídas do SDDP por UF.')
     p.add_argument('caso', help='pasta com os arquivos .hdr/.bin do SDDP')
-    p.add_argument('--tabelas', default=os.path.dirname(os.path.abspath(__file__)))
+    p.add_argument('--tabelas', default=pasta_base())
     p.add_argument('--saida')
     p.add_argument('--uf-usina', choices=['barra', 'nome'], default='barra')
     p.add_argument('--arquivos', nargs='+')

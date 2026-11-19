@@ -33,6 +33,7 @@ import argparse
 import os
 import re
 import sys
+from _base import pasta_base  # noqa: E402
 
 try:
     import numpy as np
@@ -571,7 +572,7 @@ def main():
     p.add_argument('--estagios', nargs='+', metavar='N',
                    help='estágio inicial e final (ex.: 2 13); textos extras são ignorados')
     p.add_argument('--limites', help='limites_uf.csv gerado por limites_uf.py (padrão: procura na pasta)')
-    p.add_argument('--tabelas', default=os.path.dirname(os.path.abspath(__file__)),
+    p.add_argument('--tabelas', default=pasta_base(),
                    help='pasta com usinas_renovaveis_uf.csv (padrão: pasta deste script)')
     a = p.parse_args()
     if a.estagios:

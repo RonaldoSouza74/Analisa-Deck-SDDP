@@ -39,6 +39,7 @@ import csv
 import datetime
 import os
 import sys
+from _base import pasta_base  # noqa: E402
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -246,7 +247,7 @@ def figura_resumo(lims, maxinj, saida, ano):
 def main():
     p = argparse.ArgumentParser(description='Margem de escoamento por barra (injeção x capacidade).')
     p.add_argument('caso', help='pasta do caso: businj.hdr/.bin (ou bus_inj) e arquivos de rede do deck')
-    p.add_argument('--tabelas', default=os.path.dirname(os.path.abspath(__file__)))
+    p.add_argument('--tabelas', default=pasta_base())
     p.add_argument('--saida')
     p.add_argument('--ano', type=int, default=2030)
     a = p.parse_args()

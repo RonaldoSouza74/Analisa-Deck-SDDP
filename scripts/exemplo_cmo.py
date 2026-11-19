@@ -20,6 +20,7 @@ import argparse
 import csv
 import os
 import sys
+from _base import pasta_base  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from agrega_saidas_uf import mes_ano                                            # noqa: E402
@@ -43,7 +44,7 @@ def main():
     p.add_argument('--fonte', default='ren', choices=['ren', 'hid'])
     p.add_argument('--ano', type=int, default=2030)
     p.add_argument('--tolerancia', type=float, default=1.0)
-    p.add_argument('--tabelas', default=os.path.dirname(os.path.abspath(__file__)))
+    p.add_argument('--tabelas', default=pasta_base())
     a = p.parse_args()
     sub, hora, tol = a.subsistema.upper(), a.hora, a.tolerancia
     if not 1 <= hora <= 24:

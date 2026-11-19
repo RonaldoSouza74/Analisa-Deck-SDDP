@@ -25,6 +25,7 @@ import argparse
 import csv
 import os
 import sys
+from _base import pasta_base  # noqa: E402
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -58,7 +59,7 @@ def main():
     p.add_argument('caso')
     p.add_argument('--ano', type=int, default=2030)
     p.add_argument('--circuitos', type=int, default=4, help='quantas linhas/trafos mostrar por estado (padrão 4)')
-    p.add_argument('--tabelas', default=os.path.dirname(os.path.abspath(__file__)))
+    p.add_argument('--tabelas', default=pasta_base())
     p.add_argument('--saida')
     a = p.parse_args()
     res = os.path.join(a.caso, 'resultados_uf')

@@ -24,6 +24,7 @@ import datetime
 import json
 import os
 import sys
+from _base import pasta_base  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from graficos_uf import ORDEM_UF, TEXTO, TEXTO2, GRADE, FUNDO, plt, np            # noqa: E402
@@ -131,7 +132,7 @@ def numeros(res):
 # gráficos próprios
 # ----------------------------------------------------------------------------
 def mapa(N, saida, ano):
-    arq = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mapa_uf.json')
+    arq = os.path.join(pasta_base(), 'mapa_uf.json')
     if 'uf' not in N or not os.path.exists(arq):
         return None
     from matplotlib.collections import PolyCollection
