@@ -293,8 +293,15 @@ def balanco_grupo(G, estagios, n_cen, ano):
         for j, (s_, _) in enumerate(SIT):
             ax = fig.add_subplot(gs[1, j])
             empilhado(ax, sit[s_], larg=0.75)
-            ax.set_title(f'{rot_sit[s_]}\n({100 * sit[s_].mean():.1f}% das horas)'.replace('.', ','), loc='left',
-                         fontsize=9)
+            m_ = sit[s_]
+            curto = {'garg': 'gargalo', 'entre': 'entre', 'dentro': 'dentro', 'exc': 'excesso'}
+            if s_ != 'sem' and m_.any():
+                med = '; vertido em média: ' + ', '.join(
+                    f'{curto[c]} ' + f'{S[c][m_].mean():,.0f}'.replace(',', '.') + ' MW' for c in causas)
+            else:
+                med = ''
+            ax.set_title(f'{rot_sit[s_]}\n(' + f'{100 * m_.mean():.1f}'.replace('.', ',') + f'% das horas{med})',
+                         loc='left', fontsize=8.5)
             if j == 0:
                 ax.set_ylabel('MW médio')
         for j, (k, rot) in enumerate((('ter', 'Termelétrica gerada'), ('hid', 'Hidrelétrica gerada'),
@@ -323,8 +330,9 @@ def balanco_grupo(G, estagios, n_cen, ano):
                      x=0.01, ha='left', fontsize=13, fontweight='bold')
         fig.text(0.01, 0.006, f'Médias e caixas com todas as horas do ano e os {n_cen} cenários. "Outros" = injeção − '
                  f'(renovável + hidro + térmica − carga): baterias, déficit e diferenças (média {res_.mean():.0f} MW, '
-                 f'95% entre {np.percentile(res_, 2.5):.0f} e {np.percentile(res_, 97.5):.0f} MW). Vertimento sem a geração '
-                 f'distribuída (MMGD/OMGD).',
+                 f'95% entre {np.percentile(res_, 2.5):.0f} e {np.percentile(res_, 97.5):.0f} MW).\nVertimento sem a geração '
+                 f'distribuída (MMGD/OMGD). Hora "com gargalo" = mais de 1 MW de vertimento por gargalo somado {artigo}: '
+                 'quando é pouco, o hachurado quase não aparece (ver o MW médio no título de cada painel).',
                  fontsize=7.5, color=TEXTO2)
         fig.subplots_adjust(left=0.05, right=0.99, top=0.94, bottom=0.06)
         fig.savefig(os.path.join(saida, f'balanco_{uf}.png'), dpi=115)
