@@ -64,7 +64,20 @@ def _rodar(nome, args):
         mod.main()
 
 
+def _corrige_pptx():
+    """No executável compilado (Nuitka), o python-pptx procura os templates por um caminho
+    pptx/oxml/../templates. Como a pasta pptx/oxml não existe fisicamente, o caminho não
+    resolve. Criar a pasta vazia pptx/oxml ao lado do .exe conserta a geração da apresentação."""
+    try:
+        base = os.path.dirname(os.path.abspath(sys.executable))
+        if os.path.isdir(os.path.join(base, 'pptx', 'templates')):
+            os.makedirs(os.path.join(base, 'pptx', 'oxml'), exist_ok=True)
+    except Exception:
+        pass
+
+
 def main():
+    _corrige_pptx()
     a = sys.argv[1:]
     if not a:
         sys.exit('uso: analisa <ferramenta> [argumentos]')
